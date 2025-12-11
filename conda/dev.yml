@@ -1,0 +1,48 @@
+# Conda development environment for testing local source code changes to e3sm-comms before merging them to production (main branch).
+# To set up:
+# lcrc_conda # Activate conda. Alternatives: nersc_conda, compy_conda
+# rm -rf build
+# conda clean --all --y
+# conda env create -f conda/dev.yml -n env-name
+# conda activate env-name
+# pre-commit run --all-files
+# python -m pip install .
+name: e3sm-comms-dev
+channels:
+  - conda-forge
+dependencies:
+  # Build
+  # =======================
+  - python >=3.11,<3.14
+  - pip
+  - setuptools >= 60
+  # Base
+  # =================
+  - beautifulsoup4
+  - pillow
+  - pytz
+  - requests
+  # Testing
+  # =======================
+  - pytest
+  - pytest-cov
+  # Documentation
+  # =======================
+  - sphinx
+  - sphinx-multiversion
+  - sphinx_rtd_theme
+  # Quality Assurance Tools
+  # =======================
+  # Run `pre-commit autoupdate` to get the latest pinned versions of 'rev' in
+  # `.pre-commit.config.yaml`, then update the pinned versions here.
+  # Make sure to also update qa in pyproject.toml
+  - black ==25.1.0
+  - flake8 ==7.3.0
+  - isort ==6.0.1
+  - mypy ==1.18.2
+  - pre-commit ==4.3.0
+  - types-PyYAML >=6.0.0
+  # Developer Tools
+  # =======================
+  - tbump=6.9.0
+  - ipykernel

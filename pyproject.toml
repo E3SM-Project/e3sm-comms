@@ -1,0 +1,122 @@
+[project]
+name = "e3sm_comms"
+dynamic = ["version"]
+authors = [
+    { name="Ryan Forsyth", email="forsyth2@llnl.gov" }
+]
+description = "A package for E3SM Communications supporting software"
+license = {file = "LICENSE"}
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+classifiers = [
+    # these are only for searching/browsing projects on PyPI
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "beautifulsoup4",
+]
+
+[project.optional-dependencies]
+
+testing = [
+    "pytest",
+    "pytest-cov",
+]
+
+docs = [
+    "sphinx",
+    "sphinx_rtd_theme",
+    "sphinx-multiversion",
+]
+
+# make sure these always match dev.yml and .pre-commit-config.yaml
+qa = [
+    "black==25.1.0",
+    "flake8==7.3.0",
+    "flake8-isort==6.1.1",
+    "isort==6.0.1",
+    "mypy==1.18.2",
+    "pre-commit==4.3.0",
+    "types-PyYAML >=6.0.0",
+]
+
+dev = [
+    "tbump==6.9.0",
+    "ipykernel",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+exclude = '''
+/(
+      \.eggs
+    | \.git
+    | \.mypy_cache
+    | _build
+    | conda
+    | docs
+ )/
+'''
+
+[tool.isort]
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+line_length = 88
+
+[tool.pycodestyle]
+max-line-length = 119
+exclude =  '''
+/(
+      \.tox
+    | \.git
+    | */migrations/*
+    | */static/CACHE/*
+    | docs
+    | node_modules
+    | \.idea
+    | \.mypy_cache
+    | \.pytest_cache
+    | *__init__.py
+    | venv
+ )/
+'''
+
+[tool.mypy]
+python_version = 3.13
+check_untyped_defs = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+
+[build-system]
+requires = ["setuptools>=60"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+exclude = [ "conda*", "docs*",  "tests*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "e3sm_comms.version.__version__" }
+
+# evolution of options.entry-points
+[project.scripts]
+# The first 3 rely on page-reviewer:
+e3sm-comms-newsletter-reviewer = "e3sm_comms.newsletter_reviewer.main:main"
+e3sm-comms-resource-reviewer = "e3sm_comms.resource_reviewer.main:main"
+e3sm-comms-website-reviewer = "e3sm_comms.website_reviewer.main:main"
+e3sm-comms-tree-reviewer = "e3sm_comms.tree_reviewer.main:main"
+e3sm-comms-video-reviewer = "e3sm_comms.video_reviewer.main:main"
+
+#[project.urls]
+# Documentation =
+# "Bug Tracker" =
