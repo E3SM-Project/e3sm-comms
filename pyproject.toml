@@ -110,10 +110,12 @@ version = { attr = "e3sm_comms.version.__version__" }
 
 # evolution of options.entry-points
 [project.scripts]
-# The first 3 rely on page-reviewer:
+# These rely on page-reviewer (and thus require Confluence access):
 e3sm-comms-newsletter-reviewer = "e3sm_comms.newsletter_reviewer.main:main"
 e3sm-comms-resource-reviewer = "e3sm_comms.resource_reviewer.main:main"
 e3sm-comms-website-reviewer = "e3sm_comms.website_reviewer.main:main"
+# These do NOT rely on page-reviewer:
+e3sm-comms-html-reviewer = "e3sm_comms.html_reviewer.main:main"
 e3sm-comms-tree-reviewer = "e3sm_comms.tree_reviewer.main:main"
 e3sm-comms-video-reviewer = "e3sm_comms.video_reviewer.main:main"
 

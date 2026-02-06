@@ -13,7 +13,7 @@ def main():
     c.output_dir = "/home/ac.forsyth2/ez/e3sm-comms-io/output/newsletter_reviewer/"  # Must end with "/"
     c.requested_output = ["newsletter_review_table"]
     c.check_links_work = True
-    c.scan_links_for_sensitive_terms = True
+    c.scan_links_for_sensitive_terms = False
     c.confluence_api_comment_tracking_bug_exists = False
     c.read_input()
     run(c)
