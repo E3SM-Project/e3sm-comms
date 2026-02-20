@@ -5,6 +5,7 @@ from e3sm_comms.page_reviewer.utils_base import Config
 def main():
     c = Config("website")
     c.file_input_confluence_paths = "/home/ac.forsyth2/ez/e3sm-comms-io/input/website_reviewer/confluence_top_level_tabs_20260109.txt"
+    # c.file_input_confluence_paths = "/home/ac.forsyth2/ez/e3sm-comms-io/input/website_reviewer/confluence_top_levels_ALL.txt"
     c.sensitive_terms_file = (
         "/home/ac.forsyth2/ez/e3sm-comms-io/input/shared/sensitive_terms.txt"
     )
