@@ -103,17 +103,19 @@ requires = ["setuptools>=60"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-exclude = [ "conda*", "docs*",  "tests*"]
+exclude = ["build*", "conda*", "docs*",  "tests*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "e3sm_comms.version.__version__" }
 
 # evolution of options.entry-points
 [project.scripts]
-# The first 3 rely on page-reviewer:
+# These require Confluence API access:
 e3sm-comms-newsletter-reviewer = "e3sm_comms.newsletter_reviewer.main:main"
 e3sm-comms-resource-reviewer = "e3sm_comms.resource_reviewer.main:main"
 e3sm-comms-website-reviewer = "e3sm_comms.website_reviewer.main:main"
+# These do not:
+e3sm-comms-e3sm-org-reviewer = "e3sm_comms.e3sm_org_reviewer.main:main"
 e3sm-comms-tree-reviewer = "e3sm_comms.tree_reviewer.main:main"
 e3sm-comms-video-reviewer = "e3sm_comms.video_reviewer.main:main"
 
