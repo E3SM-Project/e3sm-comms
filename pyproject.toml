@@ -116,6 +116,7 @@ e3sm-comms-resource-reviewer = "e3sm_comms.resource_reviewer.main:main"
 e3sm-comms-website-reviewer = "e3sm_comms.website_reviewer.main:main"
 # These do not:
 e3sm-comms-e3sm-org-reviewer = "e3sm_comms.e3sm_org_reviewer.main:main"
+e3sm-comms-html-reviewer = "e3sm_comms.html_reviewer.main:main"
 e3sm-comms-tree-reviewer = "e3sm_comms.tree_reviewer.main:main"
 e3sm-comms-video-reviewer = "e3sm_comms.video_reviewer.main:main"
 

@@ -9,11 +9,11 @@ def main():
         "/home/ac.forsyth2/ez/e3sm-comms-io/input/shared/sensitive_terms.txt"
     )
     c.first_person_file = "/home/ac.forsyth2/ez/e3sm-comms-io/input/newsletter_reviewer/first_person_ok_urls.txt"
-    c.newsletter_test_link = ""
+    c.newsletter_test_link = "https://us18.campaign-archive.com/?e=__test_email__&u=11f9e1f9713b9366390852682&id=f5a2221a36"
     c.output_dir = "/home/ac.forsyth2/ez/e3sm-comms-io/output/newsletter_reviewer/"  # Must end with "/"
     c.requested_output = ["newsletter_review_table"]
     c.check_links_work = True
-    c.scan_links_for_sensitive_terms = True
+    c.scan_links_for_sensitive_terms = False
     c.confluence_api_comment_tracking_bug_exists = False
     c.read_input()
     run(c)

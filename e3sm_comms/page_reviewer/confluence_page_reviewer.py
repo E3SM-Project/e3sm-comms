@@ -140,9 +140,16 @@ def extract_data_from_content_url_body(
 
     if "newsletter_review_table" in config.requested_output:
         if page.url not in config.list_first_person_urls:
-            page.main_html.first_person_phrases = find_first_person_phrases(
-                page.main_html.paragraphs
-            )
+            if any(page.page_id in url for url in config.list_first_person_urls):
+                print(
+                    "  Skipping first-person review. Page ID is in the approved list."
+                )
+            else:
+                page.main_html.first_person_phrases = find_first_person_phrases(
+                    page.main_html.paragraphs
+                )
+        else:
+            print("  Skipping first-person review. Page URL is in the approved list.")
         page.main_html.double_spaces_after_periods = find_double_spaces_after_periods(
             page.main_html.paragraphs
         )

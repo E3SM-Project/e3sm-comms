@@ -164,31 +164,48 @@ class LinkedURLs(object):
         e3sm_org_links_not_whitelisted: List[str] = []
         other_inaccessible_links: List[str] = []
         for link_url in links:
-            try:
-                response = requests.get(link_url, timeout=10)
-                response.raise_for_status()  # Raises HTTPError for 4xx/5xx responses
-                if scan_links_for_sensitive_terms:
-                    html_content = response.content
-                    soup = BeautifulSoup(html_content, "html.parser")
-                    text_content = soup.get_text(separator=" ", strip=True)
-                    sensitive_terms: Dict[str, int] = find_sensitive_terms(
-                        list_sensitive_terms, text_content.lower()
-                    )
-                    if sensitive_terms:
-                        links_with_sensitive_terms[link_url] = sensitive_terms
-            except requests.exceptions.Timeout:
-                print(f"Timeout when requesting {link_url}")
-                other_inaccessible_links.append(link_url)
-            except requests.exceptions.RequestException as e:
-                error_message: str = f"{e}"
-                if error_message.startswith(
-                    "503 Server Error: Service Temporarily Unavailable for url: https://e3sm.org"
-                ):
-                    e3sm_org_links_not_whitelisted.append(link_url)
-                else:
+            known_inaccessible: bool = False
+            # No point trying to read these pages:
+            known_inaccessible_link_prefixes: List[str] = [
+                "https://glossary.ametsoc.org/",
+                "https://www.amd.com/",
+                "https://agupubs.onlinelibrary.wiley.com/",
+                "https://doi.org/",
+                "/wiki/spaces/",
+                "mailto:",
+            ]
+            for prefix in known_inaccessible_link_prefixes:
+                if link_url.startswith(prefix):
+                    print(f"  Known inaccessible link: {link_url}")
                     other_inaccessible_links.append(link_url)
-            except Exception:
-                other_inaccessible_links.append(link_url)
+                    known_inaccessible = True
+                    break
+            if not known_inaccessible:
+                try:
+                    response = requests.get(link_url, timeout=10)
+                    response.raise_for_status()  # Raises HTTPError for 4xx/5xx responses
+                    if scan_links_for_sensitive_terms:
+                        html_content = response.content
+                        soup = BeautifulSoup(html_content, "html.parser")
+                        text_content = soup.get_text(separator=" ", strip=True)
+                        sensitive_terms: Dict[str, int] = find_sensitive_terms(
+                            list_sensitive_terms, text_content.lower()
+                        )
+                        if sensitive_terms:
+                            links_with_sensitive_terms[link_url] = sensitive_terms
+                except requests.exceptions.Timeout:
+                    print(f"  Timeout when requesting {link_url}")
+                    other_inaccessible_links.append(link_url)
+                except requests.exceptions.RequestException as e:
+                    error_message: str = f"{e}"
+                    if error_message.startswith(
+                        "503 Server Error: Service Temporarily Unavailable for url: https://e3sm.org"
+                    ):
+                        e3sm_org_links_not_whitelisted.append(link_url)
+                    else:
+                        other_inaccessible_links.append(link_url)
+                except Exception:
+                    other_inaccessible_links.append(link_url)
 
         self.all_links: List[str] = links
         self.links_with_sensitive_terms: Dict[str, Dict[str, int]] = (

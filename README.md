@@ -10,6 +10,11 @@ This package is for implementing the software needs of the E3SM Communications t
 - input: txt file listing e3sm.org pages to review, txt file containing phrases to search for
 - output: txt file listing e3sm.org pages containing those phrases
 
+`e3sm-comms-html-reviewer`
+- input: 1 txt file of html copied from WordPress that includes yellow highlights left over from Confluence.
+- output: 1 txt file of html with those highlights removed.
+- Known issues: more than just `<mark>` tags are changed (presumably no other semantic changes though)
+
 `e3sm-comms-tree-reviewer`
 - input: 2 txt files showing the website structure in hierarchical form (via indents) -- i.e. in tree form
 - output: txt file listing the steps of moving subtrees to get from one tree to the other

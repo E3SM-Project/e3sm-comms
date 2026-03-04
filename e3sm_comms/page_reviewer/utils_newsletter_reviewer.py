@@ -95,7 +95,7 @@ def find_first_person_phrases(paragraphs: List[str]) -> List[str]:
 
 def ignore_terms_based_on_context(text: str) -> str:
     # Ignore Heroic Bug Fixes header
-    heroic_bug_fixes = "Bugs are an inevitable part of any complex software project, and E3SM is no exception. A lot of time goes into finding and fixing bugs, the resulting impacts can rival major parameterization changes, but these efforts and their impacts frequently go unreported. Starting with this issue, Floating Points is proud to introduce Heroic Bug Fixes, a recurring column that celebrates the critical yet often overlooked work of debugging. We hope that by shining a well-deserved spotlight on this critical work we can inspire further debugging efforts across the community and provide the broader E3SM community with timely information about changes which could aid their own development and investigations."
+    heroic_bug_fixes = "Bugs are an inevitable part of any complex software project, and E3SM is no exception. A lot of time goes into finding and fixing bugs, the resulting impacts can rival major parameterization changes, but these efforts and their impacts frequently go unreported. Heroic Bug Fixes is a recurring column that celebrates the critical yet often overlooked work of debugging. We hope that by shining a well-deserved spotlight on this critical work we can inspire further debugging efforts across the community and provide the broader E3SM community with timely information about changes which could aid their own development and investigations."
     text = re.sub(heroic_bug_fixes, "", text)
     # us
     text = re.sub("contiguous US", "contiguous U.S.", text)
@@ -373,6 +373,7 @@ def construct_markdown_table(
             "Ready for Peter",
             "Ready for Renata",
             "Draft",
+            "Not started",
         ]:
             if groups[status]:
                 f.write(f"### Status: {status}\n")
@@ -477,6 +478,7 @@ def split_by_review_status(
     page_list: List[ConfluencePage],
 ) -> Dict[str, List[ConfluencePage]]:
     groups: Dict[str, List[ConfluencePage]] = {
+        "Not started": [],
         "Draft": [],
         "Ready for Renata": [],
         "Ready for Peter": [],
