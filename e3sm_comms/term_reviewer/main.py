@@ -1,14 +1,15 @@
 import ast
+from typing import List, Tuple
 
 from e3sm_comms.utils import IO_DIR
 
-INPUT: str = f"{IO_DIR}/input/term_reviewer/wordpress_sensitive_terms.txt"
-# INPUT: str = f"{IO_DIR}/input/term_reviewer/confluence_sensitive_terms.txt"
+INPUT_E3SM_ORG: str = f"{IO_DIR}/input/term_reviewer/wordpress_sensitive_terms.txt"
+INPUT_CONFLUENCE: str = f"{IO_DIR}/input/term_reviewer/confluence_sensitive_terms.txt"
 OUTPUT: str = f"{IO_DIR}/output/term_reviewer/sensitive_terms.txt"
 
 
-def sort_by_match_sum(input_file, output_file):
-    entries = []
+def sort_by_match_sum(input_file: str) -> List[Tuple[int, str]]:
+    entries: List[Tuple[int, str]] = []
 
     with open(input_file, "r", encoding="utf-8") as f:
         for line in f:
@@ -34,7 +35,7 @@ def sort_by_match_sum(input_file, output_file):
                 continue
 
             try:
-                total = sum(dict_data.values())
+                total: int = sum(dict_data.values())
             except TypeError:
                 print(f"Skipping line with non-numeric values: {line}")
                 continue
@@ -42,11 +43,14 @@ def sort_by_match_sum(input_file, output_file):
             entries.append((total, line))
 
     entries.sort(key=lambda x: x[0], reverse=True)
-
-    with open(output_file, "w", encoding="utf-8") as f:
-        for _, line in entries:
-            f.write(line + "\n")
+    return entries
 
 
 def main():
-    sort_by_match_sum(INPUT, OUTPUT)
+    entries_e3sm_org: List[Tuple[int, str]] = sort_by_match_sum(INPUT_E3SM_ORG)
+    entries_confluence: List[Tuple[int, str]] = sort_by_match_sum(INPUT_CONFLUENCE)
+    with open(OUTPUT, "w", encoding="utf-8") as f:
+        for _, line in entries_e3sm_org:
+            f.write(line + "\n")
+        for _, line in entries_confluence:
+            f.write(line + "\n")
