@@ -4,12 +4,10 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 
-INPUT_HTML = (
-    "/home/ac.forsyth2/ez/e3sm-comms-io/input/html_reviewer/highlighted_html.txt"
-)
-OUTPUT_HTML = (
-    "/home/ac.forsyth2/ez/e3sm-comms-io/output/html_reviewer/non_highlighted_html.txt"
-)
+from e3sm_comms.utils import IO_DIR
+
+INPUT_HTML = f"{IO_DIR}/input/html_reviewer/highlighted_html.txt"
+OUTPUT_HTML = f"{IO_DIR}/output/html_reviewer/non_highlighted_html.txt"
 
 
 def remove_inline_comment_marks(html: str) -> str:
