@@ -1,16 +1,11 @@
 from typing import Dict, List
 
 from e3sm_comms.page_reviewer.utils_base import LinkedURLs
+from e3sm_comms.utils import IO_DIR
 
-INPUT_E3SM_ORG_PATHS: str = (
-    "/home/ac.forsyth2/ez/e3sm-comms-io/input/e3sm_org_reviewer/web_pages.txt"
-)
-INPUT_SEARCH_PHRASES: str = (
-    "/home/ac.forsyth2/ez/e3sm-comms-io/input/shared/sensitive_terms.txt"
-)
-OUTPUT: str = (
-    "/home/ac.forsyth2/ez/e3sm-comms-io/output/e3sm_org_reviewer/found_phrases.txt"
-)
+INPUT_E3SM_ORG_PATHS: str = f"{IO_DIR}/input/e3sm_org_reviewer/web_pages.txt"
+INPUT_SEARCH_PHRASES: str = f"{IO_DIR}/input/shared/sensitive_terms.txt"
+OUTPUT: str = f"{IO_DIR}/output/e3sm_org_reviewer/found_phrases.txt"
 
 
 def main():

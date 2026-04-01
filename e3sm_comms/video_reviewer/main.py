@@ -2,13 +2,11 @@ import re
 from datetime import datetime, timedelta
 from typing import List, Tuple
 
-INPUT_TIMESTAMPS = (
-    "/home/ac.forsyth2/ez/e3sm-comms-io/input/video_reviewer/timestamps.txt"
-)
-INPUT_CUTS = "/home/ac.forsyth2/ez/e3sm-comms-io/input/video_reviewer/cuts.txt"
-OUTPUT_UPDATED_TIMESTAMPS = (
-    "/home/ac.forsyth2/ez/e3sm-comms-io/output/video_reviewer/updated_timestamps.txt"
-)
+from e3sm_comms.utils import IO_DIR
+
+INPUT_TIMESTAMPS = f"{IO_DIR}/input/video_reviewer/timestamps.txt"
+INPUT_CUTS = f"{IO_DIR}/input/video_reviewer/cuts.txt"
+OUTPUT_UPDATED_TIMESTAMPS = f"{IO_DIR}/output/video_reviewer/updated_timestamps.txt"
 
 
 def main():

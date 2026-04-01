@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from e3sm_comms.utils import IO_DIR
+
 # Configuration constants
-INPUT_TREE_A = "/home/ac.forsyth2/ez/e3sm-comms-io/input/tree_reviewer/hierarchical_outline_20251203.txt"
-INPUT_TREE_B = "/home/ac.forsyth2/ez/e3sm-comms-io/input/tree_reviewer/hierarchical_outline_20260109.txt"
-OUTPUT_STEP_LIST = (
-    "/home/ac.forsyth2/ez/e3sm-comms-io/output/tree_reviewer/tree_diff_output.txt"
-)
+INPUT_TREE_A = f"{IO_DIR}/input/tree_reviewer/hierarchical_outline_20251203.txt"
+INPUT_TREE_B = f"{IO_DIR}/input/tree_reviewer/hierarchical_outline_20260109.txt"
+OUTPUT_STEP_LIST = f"{IO_DIR}/output/tree_reviewer/tree_diff_output.txt"
 
 
 @dataclass
