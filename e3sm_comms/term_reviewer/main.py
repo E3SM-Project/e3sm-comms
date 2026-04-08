@@ -185,7 +185,7 @@ def write_summary_table(f, grouped_entries: Dict[str, List[Tuple[int, str]]]) ->
 
     f.write("### Summary Table\n")
     f.write(
-        "How to interpret: each cell's value is the number of pages published in year <row> that contains <col> terms\n"
+        "How to interpret: each cell's value is the number of pages published in year `row` that contains `col` terms\n"
     )
 
     f.write("| Year | Total (i.e., any number of terms) | 1 | 2 | 3 | 4 | 5+ |\n")
