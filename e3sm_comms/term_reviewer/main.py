@@ -1,5 +1,7 @@
 import ast
-from typing import Dict, List, Optional, Tuple
+import re
+from collections import defaultdict
+from typing import DefaultDict, Dict, List, Optional, Tuple
 
 from e3sm_comms.page_reviewer.utils_base import map_confluence_to_e3sm
 from e3sm_comms.utils import IO_DIR
@@ -10,6 +12,8 @@ OUTPUT: str = f"{IO_DIR}/output/term_reviewer/sensitive_terms.md"
 
 CONFLUENCE_SPACE = "EPWCD"
 CONFLUENCE_BASE = "https://e3sm.atlassian.net/wiki"
+
+FROM_PREFIX_RE = re.compile(r"^\[From\s+(\d{4})-\d{2}-\d{2}T[^\]]+\]\s*(.*)$")
 
 
 def build_confluence_url(page_id: str, space_key: str = CONFLUENCE_SPACE) -> str:
@@ -26,7 +30,6 @@ def parse_dict(dict_str: str) -> Optional[Dict[str, int]]:
         return None
 
     try:
-        # Force numeric validation
         total = sum(data.values())
     except TypeError:
         return None
@@ -37,8 +40,22 @@ def parse_dict(dict_str: str) -> Optional[Dict[str, int]]:
     return data
 
 
-def sort_by_match_sum(input_file: str) -> List[Tuple[int, str]]:
-    entries: List[Tuple[int, str]] = []
+def extract_year_and_remainder(line: str) -> Tuple[Optional[int], str]:
+    """
+    Supports lines like:
+    [From 2023-04-12T21:05:24.198Z] 3746136122: Title -- {'str1': 3}
+    """
+    match = FROM_PREFIX_RE.match(line)
+    if not match:
+        return None, line
+
+    year = int(match.group(1))
+    remainder = match.group(2).strip()
+    return year, remainder
+
+
+def sort_and_group_by_year(input_file: str) -> Dict[str, List[Tuple[int, str]]]:
+    grouped_entries: DefaultDict[str, List[Tuple[int, str]]] = defaultdict(list)
 
     with open(input_file, "r", encoding="utf-8") as f:
         for raw_line in f:
@@ -46,32 +63,30 @@ def sort_by_match_sum(input_file: str) -> List[Tuple[int, str]]:
             if not line.strip():
                 continue
 
-            dict_start = line.find("{")
+            year, remainder = extract_year_and_remainder(line)
+            year_key = str(year) if year is not None else "Unknown"
+
+            dict_start = remainder.find("{")
             if dict_start == -1:
                 print(f"Skipping malformed line: {line}")
                 continue
 
-            dict_str = line[dict_start:].strip()
+            dict_str = remainder[dict_start:].strip()
             dict_data = parse_dict(dict_str)
             if dict_data is None:
                 print(f"Skipping malformed dictionary: {line}")
                 continue
 
             total = int(sum(dict_data.values()))
-            entries.append((total, line))
+            grouped_entries[year_key].append((total, remainder))
 
-    entries.sort(key=lambda x: x[0], reverse=True)
-    return entries
+    for year_key in grouped_entries:
+        grouped_entries[year_key].sort(key=lambda x: x[0], reverse=True)
+
+    return dict(grouped_entries)
 
 
 def format_wordpress_line(line: str) -> Optional[str]:
-    """
-    Input example:
-    https://e3sm.org/moab-based-coupler-achieves-bit-for-bit-parity-with-legacy-system/: {'str1': 1}
-
-    Output example:
-    [https://e3sm.org/moab-based-coupler-achieves-bit-for-bit-parity-with-legacy-system/](https://e3sm.org/moab-based-coupler-achieves-bit-for-bit-parity-with-legacy-system/) -- {'str1': 1}
-    """
     dict_start = line.find("{")
     if dict_start == -1:
         return None
@@ -87,13 +102,6 @@ def format_wordpress_line(line: str) -> Optional[str]:
 
 
 def format_confluence_line(line: str) -> Optional[str]:
-    """
-    Input example:
-    3841294373: E3SM Publicity -- {'str1': 85, 'str2': 20, 'str3': 2}
-
-    Output example:
-    E3SM Publicity: [confluence](https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/3841294373) [e3sm.org](https://e3sm.org/e3sm-publicity) -- {'str1': 85, 'str2': 20, 'str3': 2}
-    """
     dict_start = line.find("{")
     if dict_start == -1:
         return None
@@ -101,8 +109,6 @@ def format_confluence_line(line: str) -> Optional[str]:
     counts = line[dict_start:].strip()
     prefix = line[:dict_start].rstrip()
 
-    # Expected prefix format:
-    # "<page_id>: <title> --"
     if prefix.endswith("--"):
         prefix = prefix[:-2].rstrip()
 
@@ -136,21 +142,38 @@ def format_confluence_line(line: str) -> Optional[str]:
     return md
 
 
+def write_section(
+    f,
+    section_title: str,
+    grouped_entries: Dict[str, List[Tuple[int, str]]],
+    formatter,
+) -> None:
+    f.write(f"## {section_title}\n\n")
+
+    def year_sort_key(year_str: str) -> Tuple[int, int]:
+        if year_str == "Unknown":
+            return (1, 0)
+        return (0, -int(year_str))
+
+    for year in sorted(grouped_entries.keys(), key=year_sort_key):
+        f.write(f"### {year}\n\n")
+        for _, line in grouped_entries[year]:
+            formatted = formatter(line)
+            if formatted:
+                f.write(f"- {formatted}\n")
+        f.write("\n")
+
+
 def main() -> None:
-    entries_e3sm_org: List[Tuple[int, str]] = sort_by_match_sum(INPUT_E3SM_ORG)
-    entries_confluence: List[Tuple[int, str]] = sort_by_match_sum(INPUT_CONFLUENCE)
+    entries_e3sm_org = sort_and_group_by_year(INPUT_E3SM_ORG)
+    entries_confluence = sort_and_group_by_year(INPUT_CONFLUENCE)
 
     with open(OUTPUT, "w", encoding="utf-8") as f:
         f.write("# Sensitive Terms Report\n\n")
 
-        f.write("## e3sm.org\n\n")
-        for _, line in entries_e3sm_org:
-            formatted = format_wordpress_line(line)
-            if formatted:
-                f.write(f"- {formatted}\n")
+        write_section(f, "e3sm.org", entries_e3sm_org, format_wordpress_line)
+        write_section(f, "Confluence", entries_confluence, format_confluence_line)
 
-        f.write("\n## Confluence\n\n")
-        for _, line in entries_confluence:
-            formatted = format_confluence_line(line)
-            if formatted:
-                f.write(f"- {formatted}\n")
+
+if __name__ == "__main__":
+    main()
