@@ -64,7 +64,7 @@ def sort_and_group_by_year(input_file: str) -> Dict[str, List[Tuple[int, str]]]:
                 continue
 
             year, remainder = extract_year_and_remainder(line)
-            year_key = str(year) if year is not None else "Unknown"
+            year_key = str(year) if year is not None else "Unknown year"
 
             dict_start = remainder.find("{")
             if dict_start == -1:
@@ -145,13 +145,15 @@ def format_confluence_line(line: str) -> Optional[str]:
 def write_section(
     f,
     section_title: str,
+    section_description: str,
     grouped_entries: Dict[str, List[Tuple[int, str]]],
     formatter,
 ) -> None:
     f.write(f"## {section_title}\n\n")
+    f.write(f"Description: {section_description}\n\n")
 
     def year_sort_key(year_str: str) -> Tuple[int, int]:
-        if year_str == "Unknown":
+        if year_str == "Unknown year":
             return (1, 0)
         return (0, -int(year_str))
 
@@ -165,14 +167,29 @@ def write_section(
 
 
 def main() -> None:
+    description_e3sm_org: str = (
+        "These are the currently publicly-available (whitelisted) e3sm.org pages that include sensitive terms."
+    )
+    description_confluence: str = (
+        "These are the Confluence pages (serving as drafts of e3sm.org pages) that include sensitive terms. The 'confluence' links are what the script _actually_ reviewed. The 'e3sm.org' links are _predicted_ based on common URL naming patterns and thus may in fact be broken links. If the Confluence drafts and actual e3sm.org pages have not been kept in sync, remember that the term count is for the Confluence draft, not the actual e3sm.org page."
+    )
+
     entries_e3sm_org = sort_and_group_by_year(INPUT_E3SM_ORG)
     entries_confluence = sort_and_group_by_year(INPUT_CONFLUENCE)
 
     with open(OUTPUT, "w", encoding="utf-8") as f:
         f.write("# Sensitive Terms Report\n\n")
 
-        write_section(f, "e3sm.org", entries_e3sm_org, format_wordpress_line)
-        write_section(f, "Confluence", entries_confluence, format_confluence_line)
+        write_section(
+            f, "e3sm.org", description_e3sm_org, entries_e3sm_org, format_wordpress_line
+        )
+        write_section(
+            f,
+            "Confluence",
+            description_confluence,
+            entries_confluence,
+            format_confluence_line,
+        )
 
 
 if __name__ == "__main__":
