@@ -100,6 +100,7 @@ class ConfluencePage(object):
         # Set by extract_data_from_content_url
         self.title: str = ""
         self.current_version: int = 0
+        self.created_date: str = ""
 
         # Set by extract_data_from_content_url_body
         self.main_html: Optional[ParsedHTML] = None

@@ -6,9 +6,15 @@ from e3sm_comms.utils import IO_DIR
 def main():
     c = Config("website")
     # c.file_input_confluence_paths = f"{IO_DIR}/input/website_reviewer/confluence_top_level_tabs_20260109.txt"
+    # c.file_input_confluence_paths = (
+    #     f"{IO_DIR}/input/website_reviewer/confluence_top_levels_ALL.txt"
+    # )
+
+    # _partial excludes these tabs: RESEARCH, MODEL, DATA
     c.file_input_confluence_paths = (
-        f"{IO_DIR}/input/website_reviewer/confluence_top_levels_ALL.txt"
+        f"{IO_DIR}/input/website_reviewer/confluence_top_levels_partial.txt"
     )
+
     c.sensitive_terms_file = f"{IO_DIR}/input/shared/sensitive_terms.txt"
     c.output_dir = f"{IO_DIR}/output/website_reviewer/"  # Must end with "/"
     c.requested_output = [
