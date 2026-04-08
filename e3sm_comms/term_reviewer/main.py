@@ -142,6 +142,65 @@ def format_confluence_line(line: str) -> Optional[str]:
     return md
 
 
+def year_sort_key(year_str: str) -> Tuple[int, int]:
+    if year_str == "Unknown year":
+        return (1, 0)
+    return (0, -int(year_str))
+
+
+def build_year_summary(
+    grouped_entries: Dict[str, List[Tuple[int, str]]],
+) -> Dict[str, Dict[str, int]]:
+    summary: Dict[str, Dict[str, int]] = {}
+
+    for year, entries in grouped_entries.items():
+        counts = {
+            "total": len(entries),
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "4": 0,
+            "5+": 0,
+        }
+
+        for total_terms, _ in entries:
+            if total_terms == 1:
+                counts["1"] += 1
+            elif total_terms == 2:
+                counts["2"] += 1
+            elif total_terms == 3:
+                counts["3"] += 1
+            elif total_terms == 4:
+                counts["4"] += 1
+            elif total_terms >= 5:
+                counts["5+"] += 1
+
+        summary[year] = counts
+
+    return summary
+
+
+def write_summary_table(f, grouped_entries: Dict[str, List[Tuple[int, str]]]) -> None:
+    summary = build_year_summary(grouped_entries)
+
+    f.write("### Summary Table\n")
+    f.write(
+        "How to interpret: each cell's value is the number of pages published in year <row> that contains <col> terms\n"
+    )
+
+    f.write("| Year | Total (i.e., any number of terms) | 1 | 2 | 3 | 4 | 5+ |\n")
+    f.write("| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+
+    for year in sorted(summary.keys(), key=year_sort_key):
+        counts = summary[year]
+        f.write(
+            f"| {year} | {counts['total']} | {counts['1']} | {counts['2']} | "
+            f"{counts['3']} | {counts['4']} | {counts['5+']} |\n"
+        )
+
+    f.write("\n")
+
+
 def write_section(
     f,
     section_title: str,
@@ -152,17 +211,14 @@ def write_section(
     f.write(f"## {section_title}\n\n")
     f.write(f"Description: {section_description}\n\n")
 
-    def year_sort_key(year_str: str) -> Tuple[int, int]:
-        if year_str == "Unknown year":
-            return (1, 0)
-        return (0, -int(year_str))
+    write_summary_table(f, grouped_entries)
 
     for year in sorted(grouped_entries.keys(), key=year_sort_key):
         f.write(f"### {year}\n\n")
-        for _, line in grouped_entries[year]:
+        for idx, (_, line) in enumerate(grouped_entries[year], start=1):
             formatted = formatter(line)
             if formatted:
-                f.write(f"- {formatted}\n")
+                f.write(f"{idx}. {formatted}\n")
         f.write("\n")
 
 
