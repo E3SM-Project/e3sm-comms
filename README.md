@@ -16,8 +16,8 @@ This package is for implementing the software needs of the E3SM Communications t
 - Known issues: more than just `<mark>` tags are changed (presumably no other semantic changes though)
 
 `e3sm-comms-term-reviewer`
-- input: txt file of sensitive terms (e.g., output from `e3sm-comms-e3sm-org-reviewer` or `e3sm-comms-website-reviewer`)
-- output: sorted version of that txt file
+- input: 2 txt files of sensitive terms (use the output from `e3sm-comms-e3sm-org-reviewer` & `e3sm-comms-website-reviewer`), txt file listing e3sm.org pages that should be marked as archived
+- output: Markdown report of terms found
 
 `e3sm-comms-tree-reviewer`
 - input: 2 txt files showing the website structure in hierarchical form (via indents) -- i.e. in tree form
