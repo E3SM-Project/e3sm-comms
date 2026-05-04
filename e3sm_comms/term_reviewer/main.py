@@ -3,6 +3,8 @@ import re
 from collections import defaultdict
 from typing import DefaultDict, Dict, List, Optional, Tuple
 
+import requests  # type: ignore
+
 from e3sm_comms.page_reviewer.utils_base import map_confluence_to_e3sm
 from e3sm_comms.utils import IO_DIR
 
@@ -126,6 +128,7 @@ def format_confluence_line(line: str) -> Optional[str]:
 
     confluence_url = build_confluence_url(page_id)
 
+    e3sm_url: Optional[str]
     try:
         e3sm_url = map_confluence_to_e3sm(confluence_url, page_title=title)
     except Exception as exc:
@@ -133,10 +136,30 @@ def format_confluence_line(line: str) -> Optional[str]:
             f"Could not map Confluence URL to e3sm.org URL for {confluence_url}: {exc}"
         )
         e3sm_url = None
+    e3sm_url_status: Optional[str] = None
+    if e3sm_url:
+        try:
+            response = requests.get(e3sm_url, timeout=10)
+            response.raise_for_status()  # Raises HTTPError for 4xx/5xx responses
+            e3sm_url_status = "link works not logged-in"
+        except requests.exceptions.Timeout:
+            e3sm_url_status = "link times out"
+        except requests.exceptions.RequestException as e:
+            error_message: str = f"{e}"
+            if error_message.startswith(
+                "503 Server Error: Service Temporarily Unavailable for url: https://e3sm.org"
+            ):
+                e3sm_url_status = "link not whitelisted"
+            else:
+                e3sm_url_status = "link raises RequestException"
+        except Exception:
+            e3sm_url_status = "link raises Exception"
 
     md = f"{title}: [confluence]({confluence_url})"
     if e3sm_url:
         md += f" [e3sm.org]({e3sm_url})"
+    if e3sm_url_status:
+        md += f" (Note: {e3sm_url_status})"
     md += f" -- {counts}"
 
     return md
