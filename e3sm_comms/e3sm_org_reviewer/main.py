@@ -7,9 +7,7 @@ INPUT_ACCESSIBLE_E3SM_ORG_PATHS: str = f"{IO_DIR}/input/e3sm_org_reviewer/web_pa
 INPUT_SEARCH_PHRASES: str = f"{IO_DIR}/input/shared/sensitive_terms.txt"
 OUTPUT_FOUND_PHRASES: str = f"{IO_DIR}/output/e3sm_org_reviewer/found_phrases.txt"
 
-INPUT_ARCHIVED_E3SM_ORG_PATHS: str = (
-    f"{IO_DIR}/input/e3sm_org_reviewer/archived_web_pages.txt"
-)
+INPUT_ARCHIVED_E3SM_ORG_PATHS: str = f"{IO_DIR}/input/shared/archived_web_pages.txt"
 OUTPUT_INCORRECTLY_ACCESSIBLE_E3SM_ORG_PATHS: str = (
     f"{IO_DIR}/output/e3sm_org_reviewer/incorrectly_accessible_web_pages.txt"
 )

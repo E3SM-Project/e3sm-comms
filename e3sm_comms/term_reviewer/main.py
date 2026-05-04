@@ -11,6 +11,7 @@ from e3sm_comms.utils import IO_DIR
 
 INPUT_E3SM_ORG: str = f"{IO_DIR}/input/term_reviewer/wordpress_sensitive_terms.txt"
 INPUT_CONFLUENCE: str = f"{IO_DIR}/input/term_reviewer/confluence_sensitive_terms.txt"
+INPUT_ARCHIVED_E3SM_ORG_PATHS: str = f"{IO_DIR}/input/shared/archived_web_pages.txt"
 OUTPUT: str = f"{IO_DIR}/output/term_reviewer/sensitive_terms.md"
 
 CONFLUENCE_SPACE = "EPWCD"
@@ -238,6 +239,13 @@ def main() -> None:
     description_confluence: str = (
         "These are the Confluence pages (serving as drafts of e3sm.org pages) that include sensitive terms. The 'confluence' links are what the script _actually_ reviewed. The 'e3sm.org' links are _predicted_ based on common URL naming patterns and thus may in fact be broken links. If the Confluence drafts and actual e3sm.org pages have not been kept in sync, remember that the term count is for the Confluence draft, not the actual e3sm.org page."
     )
+
+    with open(INPUT_ARCHIVED_E3SM_ORG_PATHS, "r", encoding="utf-8") as f:
+        list_input_archived_e3sm_org_paths: List[str] = [line.strip() for line in f]
+    if list_input_archived_e3sm_org_paths:
+        print(
+            "TODO: sort so the archived files appear at the end, as if the year was 'archived'"
+        )
 
     entries_e3sm_org = sort_and_group_by_year(INPUT_E3SM_ORG)
     entries_confluence = sort_and_group_by_year(INPUT_CONFLUENCE)
