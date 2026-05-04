@@ -12,15 +12,19 @@ from e3sm_comms.utils import IO_DIR
 INPUT_E3SM_ORG: str = f"{IO_DIR}/input/term_reviewer/wordpress_sensitive_terms.txt"
 INPUT_CONFLUENCE: str = f"{IO_DIR}/input/term_reviewer/confluence_sensitive_terms.txt"
 INPUT_ARCHIVED_E3SM_ORG_PATHS: str = f"{IO_DIR}/input/shared/archived_web_pages.txt"
-INPUT_IGNORED_E3SM_ORG_PATHS: str = (
-    f"{IO_DIR}/input/term_reviewer/ignored_e3sm_org_paths.txt"
+INPUT_KNOWN_OK_E3SM_ORG_PATHS: str = (
+    f"{IO_DIR}/input/term_reviewer/known_ok_e3sm_org_paths.txt"
+)
+INPUT_DOES_NOT_EXIST_E3SM_ORG_PATHS: str = (
+    f"{IO_DIR}/input/term_reviewer/does_not_exist_e3sm_org_paths.txt"
 )
 OUTPUT: str = f"{IO_DIR}/output/term_reviewer/sensitive_terms.md"
 
 CONFLUENCE_SPACE = "EPWCD"
 CONFLUENCE_BASE = "https://e3sm.atlassian.net/wiki"
 ARCHIVED_YEAR_LABEL = "Archived (or should be archived)"
-IGNORED_YEAR_LABEL = "IGNORED (manually reviewed)"
+KNOWN_OK_LABEL = "KNOWN OK"
+DOES_NOT_EXIST_LABEL = "DOES NOT EXIST"
 
 FROM_PREFIX_RE = re.compile(r"^\[From\s+(\d{4})-\d{2}-\d{2}T[^\]]+\]\s*(.*)$")
 
@@ -232,10 +236,12 @@ def format_confluence_line(line: str) -> Optional[str]:
 def year_sort_key(year_str: str) -> Tuple[int, int]:
     if year_str == ARCHIVED_YEAR_LABEL:
         return (1, 0)
-    if year_str == IGNORED_YEAR_LABEL:
+    if year_str == KNOWN_OK_LABEL:
         return (2, 0)
-    if year_str == "Unknown year":
+    if year_str == DOES_NOT_EXIST_LABEL:
         return (3, 0)
+    if year_str == "Unknown year":
+        return (4, 0)
     return (0, -int(year_str))
 
 
@@ -324,8 +330,13 @@ def main() -> None:
     with open(INPUT_ARCHIVED_E3SM_ORG_PATHS, "r", encoding="utf-8") as f:
         list_input_archived_e3sm_org_paths: List[str] = [line.strip() for line in f]
 
-    with open(INPUT_IGNORED_E3SM_ORG_PATHS, "r", encoding="utf-8") as f:
-        list_input_ignored_e3sm_org_paths: List[str] = [line.strip() for line in f]
+    with open(INPUT_KNOWN_OK_E3SM_ORG_PATHS, "r", encoding="utf-8") as f:
+        list_input_known_ok_e3sm_org_paths: List[str] = [line.strip() for line in f]
+
+    with open(INPUT_DOES_NOT_EXIST_E3SM_ORG_PATHS, "r", encoding="utf-8") as f:
+        list_input_does_not_exist_e3sm_org_paths: List[str] = [
+            line.strip() for line in f
+        ]
 
     entries_e3sm_org = sort_and_group_by_year(INPUT_E3SM_ORG)
     entries_e3sm_org = move_entries_to_label(
@@ -336,9 +347,15 @@ def main() -> None:
     )
     entries_e3sm_org = move_entries_to_label(
         entries_e3sm_org,
-        list_input_ignored_e3sm_org_paths,
+        list_input_known_ok_e3sm_org_paths,
         extract_wordpress_url,
-        IGNORED_YEAR_LABEL,
+        KNOWN_OK_LABEL,
+    )
+    entries_e3sm_org = move_entries_to_label(
+        entries_e3sm_org,
+        list_input_does_not_exist_e3sm_org_paths,
+        extract_wordpress_url,
+        DOES_NOT_EXIST_LABEL,
     )
 
     entries_confluence = sort_and_group_by_year(INPUT_CONFLUENCE)
@@ -350,9 +367,15 @@ def main() -> None:
     )
     entries_confluence = move_entries_to_label(
         entries_confluence,
-        list_input_ignored_e3sm_org_paths,
+        list_input_known_ok_e3sm_org_paths,
         extract_confluence_predicted_e3sm_url,
-        IGNORED_YEAR_LABEL,
+        KNOWN_OK_LABEL,
+    )
+    entries_confluence = move_entries_to_label(
+        entries_confluence,
+        list_input_does_not_exist_e3sm_org_paths,
+        extract_confluence_predicted_e3sm_url,
+        DOES_NOT_EXIST_LABEL,
     )
 
     with open(OUTPUT, "w", encoding="utf-8") as f:
