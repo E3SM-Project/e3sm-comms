@@ -1,7 +1,7 @@
 import ast
 import re
 from collections import defaultdict
-from typing import DefaultDict, Dict, List, Optional, Tuple
+from typing import Callable, DefaultDict, Dict, List, Optional, Tuple
 
 from e3sm_comms.page_reviewer.utils_base import (
     get_e3sm_url_status,
@@ -16,6 +16,7 @@ OUTPUT: str = f"{IO_DIR}/output/term_reviewer/sensitive_terms.md"
 
 CONFLUENCE_SPACE = "EPWCD"
 CONFLUENCE_BASE = "https://e3sm.atlassian.net/wiki"
+ARCHIVED_YEAR_LABEL = "Archived"
 
 FROM_PREFIX_RE = re.compile(r"^\[From\s+(\d{4})-\d{2}-\d{2}T[^\]]+\]\s*(.*)$")
 
@@ -90,6 +91,76 @@ def sort_and_group_by_year(input_file: str) -> Dict[str, List[Tuple[int, str]]]:
     return dict(grouped_entries)
 
 
+def extract_wordpress_url(line: str) -> Optional[str]:
+    dict_start = line.find("{")
+    if dict_start == -1:
+        return None
+
+    prefix = line[:dict_start].rstrip()
+    if prefix.endswith(":"):
+        prefix = prefix[:-1].rstrip()
+
+    return prefix
+
+
+def extract_confluence_predicted_e3sm_url(line: str) -> Optional[str]:
+    dict_start = line.find("{")
+    if dict_start == -1:
+        return None
+
+    prefix = line[:dict_start].rstrip()
+    if prefix.endswith("--"):
+        prefix = prefix[:-2].rstrip()
+
+    first_colon = prefix.find(":")
+    if first_colon == -1:
+        print(f"Skipping malformed Confluence line: {line}")
+        return None
+
+    page_id = prefix[:first_colon].strip()
+    title = prefix[first_colon + 1 :].strip()
+
+    if not page_id.isdigit():
+        print(f"Skipping Confluence line with non-numeric page id: {line}")
+        return None
+
+    confluence_url = build_confluence_url(page_id)
+
+    try:
+        return map_confluence_to_e3sm(confluence_url, page_title=title)
+    except Exception as exc:
+        print(
+            f"Could not map Confluence URL to e3sm.org URL for {confluence_url}: {exc}"
+        )
+        return None
+
+
+def move_entries_to_archived_year(
+    grouped_entries: Dict[str, List[Tuple[int, str]]],
+    archived_paths: List[str],
+    e3sm_url_extractor: Callable[[str], Optional[str]],
+) -> Dict[str, List[Tuple[int, str]]]:
+    archived_set = {path.strip() for path in archived_paths if path.strip()}
+    if not archived_set:
+        return grouped_entries
+
+    updated: DefaultDict[str, List[Tuple[int, str]]] = defaultdict(list)
+
+    for year, entries in grouped_entries.items():
+        for total, line in entries:
+            e3sm_url = e3sm_url_extractor(line)
+
+            if e3sm_url and e3sm_url in archived_set:
+                updated[ARCHIVED_YEAR_LABEL].append((total, line))
+            else:
+                updated[year].append((total, line))
+
+    for year_key in updated:
+        updated[year_key].sort(key=lambda x: x[0], reverse=True)
+
+    return dict(updated)
+
+
 def format_wordpress_line(line: str) -> Optional[str]:
     dict_start = line.find("{")
     if dict_start == -1:
@@ -138,6 +209,7 @@ def format_confluence_line(line: str) -> Optional[str]:
             f"Could not map Confluence URL to e3sm.org URL for {confluence_url}: {exc}"
         )
         e3sm_url = None
+
     e3sm_url_status: Optional[str] = None
     if e3sm_url:
         e3sm_url_status = get_e3sm_url_status(e3sm_url)
@@ -153,8 +225,10 @@ def format_confluence_line(line: str) -> Optional[str]:
 
 
 def year_sort_key(year_str: str) -> Tuple[int, int]:
-    if year_str == "Unknown year":
+    if year_str == ARCHIVED_YEAR_LABEL:
         return (1, 0)
+    if year_str == "Unknown year":
+        return (2, 0)
     return (0, -int(year_str))
 
 
@@ -242,13 +316,20 @@ def main() -> None:
 
     with open(INPUT_ARCHIVED_E3SM_ORG_PATHS, "r", encoding="utf-8") as f:
         list_input_archived_e3sm_org_paths: List[str] = [line.strip() for line in f]
-    if list_input_archived_e3sm_org_paths:
-        print(
-            "TODO: sort so the archived files appear at the end, as if the year was 'archived'"
-        )
 
     entries_e3sm_org = sort_and_group_by_year(INPUT_E3SM_ORG)
+    entries_e3sm_org = move_entries_to_archived_year(
+        entries_e3sm_org,
+        list_input_archived_e3sm_org_paths,
+        extract_wordpress_url,
+    )
+
     entries_confluence = sort_and_group_by_year(INPUT_CONFLUENCE)
+    entries_confluence = move_entries_to_archived_year(
+        entries_confluence,
+        list_input_archived_e3sm_org_paths,
+        extract_confluence_predicted_e3sm_url,
+    )
 
     with open(OUTPUT, "w", encoding="utf-8") as f:
         f.write("# Sensitive Terms Report\n\n")
