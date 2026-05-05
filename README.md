@@ -16,7 +16,7 @@ This package is for implementing the software needs of the E3SM Communications t
 - Known issues: more than just `<mark>` tags are changed (presumably no other semantic changes though)
 
 `e3sm-comms-term-reviewer`
-- input: 2 txt files of sensitive terms (use the output from `e3sm-comms-e3sm-org-reviewer` & `e3sm-comms-website-reviewer`), txt file listing e3sm.org pages that should be marked as archived, txt file listing e3sm.org pages that do not contain the search terms (and presumably only show up because their corresponding Confluence pages have the terms somewhere in metadata), txt file listing e3sm.org pages that are known not to exist (either the script couldn't determine the correct e3sm.org path, or it doesn't even exist).
+- input: 2 txt files of sensitive terms (use the output from `e3sm-comms-e3sm-org-reviewer` & `e3sm-comms-website-reviewer`), txt file listing e3sm.org pages that should be marked as archived, txt file listing e3sm.org pages that do not contain the search terms (and presumably only show up because their corresponding Confluence pages have the terms somewhere in metadata), txt file listing e3sm.org pages that are known not to exist (either the script couldn't determine the correct e3sm.org path, or it doesn't even exist), txt file listing e3sm.org pages that are to be kept unchanged.
 - output: Markdown report of terms found
 
 `e3sm-comms-tree-reviewer`
