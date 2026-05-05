@@ -23,8 +23,10 @@ OUTPUT: str = f"{IO_DIR}/output/term_reviewer/sensitive_terms.md"
 CONFLUENCE_SPACE = "EPWCD"
 CONFLUENCE_BASE = "https://e3sm.atlassian.net/wiki"
 ARCHIVED_YEAR_LABEL = "Archived (or should be archived)"
-KNOWN_OK_LABEL = "KNOWN OK"
-DOES_NOT_EXIST_LABEL = "DOES NOT EXIST"
+KNOWN_OK_LABEL = "Known OK (Confluence page may be reporting terms that aren't showing up on the e3sm.org page)"
+DOES_NOT_EXIST_LABEL = (
+    "Does not exist (either script couldn't find e3sm.org URL or none exists)"
+)
 
 FROM_PREFIX_RE = re.compile(r"^\[From\s+(\d{4})-\d{2}-\d{2}T[^\]]+\]\s*(.*)$")
 
