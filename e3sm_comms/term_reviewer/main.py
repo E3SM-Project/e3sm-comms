@@ -15,6 +15,9 @@ INPUT_ARCHIVED_E3SM_ORG_PATHS: str = f"{IO_DIR}/input/shared/archived_web_pages.
 INPUT_KNOWN_OK_E3SM_ORG_PATHS: str = (
     f"{IO_DIR}/input/term_reviewer/known_ok_e3sm_org_paths.txt"
 )
+INPUT_KEEP_UNCHANGED_E3SM_ORG_PATHS: str = (
+    f"{IO_DIR}/input/term_reviewer/keep_unchanged_e3sm_org_paths.txt"
+)
 INPUT_DOES_NOT_EXIST_E3SM_ORG_PATHS: str = (
     f"{IO_DIR}/input/term_reviewer/does_not_exist_e3sm_org_paths.txt"
 )
@@ -24,6 +27,7 @@ CONFLUENCE_SPACE = "EPWCD"
 CONFLUENCE_BASE = "https://e3sm.atlassian.net/wiki"
 ARCHIVED_YEAR_LABEL = "Archived (or should be archived)"
 KNOWN_OK_LABEL = "Known OK (Confluence page may be reporting terms that aren't showing up on the e3sm.org page)"
+KEEP_UNCHANGED_LABEL = "Keep unchanged"
 DOES_NOT_EXIST_LABEL = (
     "Does not exist (either script couldn't find e3sm.org URL or none exists)"
 )
@@ -240,10 +244,12 @@ def year_sort_key(year_str: str) -> Tuple[int, int]:
         return (1, 0)
     if year_str == KNOWN_OK_LABEL:
         return (2, 0)
-    if year_str == DOES_NOT_EXIST_LABEL:
+    if year_str == KEEP_UNCHANGED_LABEL:
         return (3, 0)
-    if year_str == "Unknown year":
+    if year_str == DOES_NOT_EXIST_LABEL:
         return (4, 0)
+    if year_str == "Unknown year":
+        return (5, 0)
     return (0, -int(year_str))
 
 
@@ -335,6 +341,11 @@ def main() -> None:
     with open(INPUT_KNOWN_OK_E3SM_ORG_PATHS, "r", encoding="utf-8") as f:
         list_input_known_ok_e3sm_org_paths: List[str] = [line.strip() for line in f]
 
+    with open(INPUT_KEEP_UNCHANGED_E3SM_ORG_PATHS, "r", encoding="utf-8") as f:
+        list_input_keep_unchanged_e3sm_org_paths: List[str] = [
+            line.strip() for line in f
+        ]
+
     with open(INPUT_DOES_NOT_EXIST_E3SM_ORG_PATHS, "r", encoding="utf-8") as f:
         list_input_does_not_exist_e3sm_org_paths: List[str] = [
             line.strip() for line in f
@@ -355,6 +366,12 @@ def main() -> None:
     )
     entries_e3sm_org = move_entries_to_label(
         entries_e3sm_org,
+        list_input_keep_unchanged_e3sm_org_paths,
+        extract_wordpress_url,
+        KEEP_UNCHANGED_LABEL,
+    )
+    entries_e3sm_org = move_entries_to_label(
+        entries_e3sm_org,
         list_input_does_not_exist_e3sm_org_paths,
         extract_wordpress_url,
         DOES_NOT_EXIST_LABEL,
@@ -372,6 +389,12 @@ def main() -> None:
         list_input_known_ok_e3sm_org_paths,
         extract_confluence_predicted_e3sm_url,
         KNOWN_OK_LABEL,
+    )
+    entries_confluence = move_entries_to_label(
+        entries_confluence,
+        list_input_keep_unchanged_e3sm_org_paths,
+        extract_confluence_predicted_e3sm_url,
+        KEEP_UNCHANGED_LABEL,
     )
     entries_confluence = move_entries_to_label(
         entries_confluence,
