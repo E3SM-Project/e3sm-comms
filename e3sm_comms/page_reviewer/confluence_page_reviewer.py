@@ -108,6 +108,11 @@ def extract_data_from_content_url(
         )
     current_version: str = data["version"]["number"]
     page.current_version = int(current_version)
+    if "history" not in data or "createdDate" not in data["history"]:
+        raise RuntimeError(
+            f"Response for page_id={page.page_id} does not contain 'history' or 'history > createdDate'. Full response: {data}"
+        )
+    page.created_date = data["history"]["createdDate"]
 
 
 # Functions used by newsletter, website modes ###################################

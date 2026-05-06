@@ -34,7 +34,9 @@ def write_results(config: Config, page: ConfluencePage):
             with open(
                 f"{config.output_dir}sensitive_terms.txt", "a", encoding="utf-8"
             ) as f:
-                f.write(f"{line_id} -- {page.main_html.sensitive_terms}\n")
+                f.write(
+                    f"[From {page.created_date}] {line_id} -- {page.main_html.sensitive_terms}\n"
+                )
 
     if "missing_metadata" in config.requested_output:
         # Append if there is no metadata table.

@@ -7,13 +7,17 @@ This package is for implementing the software needs of the E3SM Communications t
 ### Simple commands
 
 `e3sm-comms-e3sm-org-reviewer`
-- input: txt file listing e3sm.org pages to review, txt file containing phrases to search for
-- output: txt file listing e3sm.org pages containing those phrases
+- input: txt file listing e3sm.org pages to review, txt file containing phrases to search for, txt file listing e3sm.org pages that should be marked as archived
+- output: txt file listing e3sm.org pages containing those phrases, txt file listing e3sm.org pages that are accessible even though they should be archived
 
 `e3sm-comms-html-reviewer`
 - input: 1 txt file of html copied from WordPress that includes yellow highlights left over from Confluence.
 - output: 1 txt file of html with those highlights removed.
 - Known issues: more than just `<mark>` tags are changed (presumably no other semantic changes though)
+
+`e3sm-comms-term-reviewer`
+- input: 2 txt files of sensitive terms (use the output from `e3sm-comms-e3sm-org-reviewer` & `e3sm-comms-website-reviewer`), txt file listing e3sm.org pages that should be marked as archived, txt file listing e3sm.org pages that do not contain the search terms (and presumably only show up because their corresponding Confluence pages have the terms somewhere in metadata), txt file listing e3sm.org pages that are known not to exist (either the script couldn't determine the correct e3sm.org path, or it doesn't even exist), txt file listing e3sm.org pages that are to be kept unchanged.
+- output: Markdown report of terms found
 
 `e3sm-comms-tree-reviewer`
 - input: 2 txt files showing the website structure in hierarchical form (via indents) -- i.e. in tree form
