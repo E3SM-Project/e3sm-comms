@@ -33,12 +33,8 @@ INPUT_KEEP_UNCHANGED_E3SM_ORG_PATHS: str = (
 )
 
 OUTPUT_MARKDOWN_REPORT: str = f"{IO_DIR}/output/e3sm_org_reviewer/path_report.md"
-OUTPUT_FOUND_PHRASES: str = f"{IO_DIR}/output/e3sm_org_reviewer/found_phrases.txt"
 OUTPUT_SENSITIVE_TERMS_REPORT: str = (
     f"{IO_DIR}/output/e3sm_org_reviewer/sensitive_terms.md"
-)
-OUTPUT_INCORRECTLY_ACCESSIBLE_E3SM_ORG_PATHS: str = (
-    f"{IO_DIR}/output/e3sm_org_reviewer/incorrectly_accessible_web_pages.txt"
 )
 OUTPUT_ACTION_ITEMS_REPORT: str = f"{IO_DIR}/output/e3sm_org_reviewer/action_items.md"
 
@@ -184,7 +180,7 @@ def get_combined_urls_by_status(
     for source in (pages_by_status, posts_by_status):
         for status, urls in source.items():
             merged[status].extend(urls)
-    return {status: sorted(urls) for status, urls in merged.items()}
+    return {status: sorted(urls) for status, urls in sorted(merged.items())}
 
 
 def get_list_difference(list1: List[str], list2: List[str]) -> List[str]:
@@ -374,6 +370,8 @@ def write_markdown_report(
     published_but_not_whitelisted: List[str],
     should_be_archived: List[str],
     published_but_not_in_confluence: List[str],
+    published_not_whitelisted_and_not_in_confluence: List[str],
+    incorrectly_accessible_non_published_urls: List[str],
     invalid_whitelisted_paths: List[str],
     invalid_expected_archived_paths: List[str],
     invalid_confluence_paths: List[str],
@@ -411,6 +409,16 @@ def write_markdown_report(
             "Published but no matching Confluence path found",
             published_but_not_in_confluence,
         )
+        write_markdown_section(
+            f,
+            "Published but not whitelisted and no matching Confluence path found",
+            published_not_whitelisted_and_not_in_confluence,
+        )
+        write_markdown_section(
+            f,
+            "Non-published e3sm.org pages that are still accessible without login",
+            incorrectly_accessible_non_published_urls,
+        )
 
         f.write("# Invalid Paths\n\n")
         write_markdown_section(
@@ -435,10 +443,33 @@ def write_markdown_report(
         )
 
 
+def write_action_items_confluence_section(
+    f: TextIO, records: List[SensitiveTermRecord]
+) -> None:
+    f.write(
+        "## Confluence pages with sensitive terms mapped to published e3sm.org pages\n\n"
+    )
+
+    if not records:
+        f.write("_None._\n\n")
+        return
+
+    grouped = group_records_by_classification_and_year(records)
+
+    for classification in sorted(grouped.keys(), key=classification_sort_key):
+        f.write(f"### {classification}\n\n")
+
+        for year_label in sorted(grouped[classification].keys(), key=year_sort_key):
+            f.write(f"#### {year_label}\n\n")
+            for idx, record in enumerate(grouped[classification][year_label], start=1):
+                f.write(f"{idx}. {format_confluence_record(record)}\n")
+            f.write("\n")
+
+
 def write_action_items_report(
     output_path: str,
     should_be_archived: List[str],
-    published_but_not_in_confluence: List[str],
+    published_not_whitelisted_and_not_in_confluence: List[str],
     confluence_published_sensitive_records: List[SensitiveTermRecord],
 ) -> None:
     with open(output_path, "w", encoding="utf-8") as f:
@@ -451,7 +482,7 @@ def write_action_items_report(
             f"| Expecting to be archived, but not yet archived | {len(should_be_archived)} |\n"
         )
         f.write(
-            f"| Published but no matching Confluence path found | {len(published_but_not_in_confluence)} |\n"
+            f"| Published but not whitelisted and no matching Confluence path found | {len(published_not_whitelisted_and_not_in_confluence)} |\n"
         )
         f.write(
             f"| Confluence pages with sensitive terms mapped to published e3sm.org pages | {len(confluence_published_sensitive_records)} |\n"
@@ -466,21 +497,11 @@ def write_action_items_report(
 
         write_markdown_section(
             f,
-            "Published but no matching Confluence path found",
-            published_but_not_in_confluence,
+            "Published but not whitelisted and no matching Confluence path found",
+            published_not_whitelisted_and_not_in_confluence,
         )
 
-        f.write(
-            "## Confluence pages with sensitive terms mapped to published e3sm.org pages\n\n"
-        )
-        if not confluence_published_sensitive_records:
-            f.write("_None._\n\n")
-        else:
-            for idx, record in enumerate(
-                confluence_published_sensitive_records, start=1
-            ):
-                f.write(f"{idx}. {format_confluence_record(record)}\n")
-            f.write("\n")
+        write_action_items_confluence_section(f, confluence_published_sensitive_records)
 
 
 def parse_dict(dict_str: str) -> Optional[Dict[str, int]]:
@@ -559,28 +580,27 @@ def classify_e3sm_url(
     return CLASS_PUBLISHED, wordpress_status
 
 
-def parse_wordpress_sensitive_terms_file(input_file: str) -> List[Tuple[int, str]]:
+def parse_wordpress_sensitive_terms_lines(lines: List[str]) -> List[Tuple[int, str]]:
     parsed: List[Tuple[int, str]] = []
 
-    with open(input_file, "r", encoding="utf-8") as f:
-        for raw_line in f:
-            line = raw_line.rstrip("\n")
-            if not line.strip():
-                continue
+    for raw_line in lines:
+        line = raw_line.rstrip("\n")
+        if not line.strip():
+            continue
 
-            dict_start = line.find("{")
-            if dict_start == -1:
-                print(f"Skipping malformed WordPress sensitive-terms line: {line}")
-                continue
+        dict_start = line.find("{")
+        if dict_start == -1:
+            print(f"Skipping malformed WordPress sensitive-terms line: {line}")
+            continue
 
-            dict_str = line[dict_start:].strip()
-            dict_data = parse_dict(dict_str)
-            if dict_data is None:
-                print(f"Skipping malformed dictionary in WordPress line: {line}")
-                continue
+        dict_str = line[dict_start:].strip()
+        dict_data = parse_dict(dict_str)
+        if dict_data is None:
+            print(f"Skipping malformed dictionary in WordPress line: {line}")
+            continue
 
-            total = int(sum(dict_data.values()))
-            parsed.append((total, line))
+        total = int(sum(dict_data.values()))
+        parsed.append((total, line))
 
     parsed.sort(key=lambda x: x[0], reverse=True)
     return parsed
@@ -1015,6 +1035,9 @@ def main():
     published_but_not_in_confluence: List[str] = get_list_difference(
         published_urls, valid_confluence_paths
     )
+    published_not_whitelisted_and_not_in_confluence: List[str] = get_list_difference(
+        published_but_not_in_confluence, whitelisted_urls_expanded
+    )
 
     print(f"Whitelisted, but not published: {len(whitelisted_but_not_published)}")
     print(f"Published, but not whitelisted: {len(published_but_not_whitelisted)}")
@@ -1022,27 +1045,17 @@ def main():
     print(
         f"Published, but no matching Confluence path found: {len(published_but_not_in_confluence)}"
     )
+    print(
+        "Published, but not whitelisted and no matching Confluence path found: "
+        f"{len(published_not_whitelisted_and_not_in_confluence)}"
+    )
     print(f"Invalid whitelist paths: {len(invalid_whitelisted_paths)}")
     print(f"Invalid archive-input paths: {len(invalid_expected_archived_paths)}")
     print(
         f"Invalid Confluence-predicted e3sm.org paths: {len(invalid_confluence_paths)}"
     )
 
-    write_markdown_report(
-        output_path=OUTPUT_MARKDOWN_REPORT,
-        all_urls_by_status=all_urls_by_status,
-        valid_whitelisted_paths=valid_whitelisted_paths,
-        valid_expected_archived_paths=valid_expected_archived_paths,
-        valid_confluence_paths=valid_confluence_paths,
-        whitelisted_but_not_published=whitelisted_but_not_published,
-        published_but_not_whitelisted=published_but_not_whitelisted,
-        should_be_archived=should_be_archived,
-        published_but_not_in_confluence=published_but_not_in_confluence,
-        invalid_whitelisted_paths=invalid_whitelisted_paths,
-        invalid_expected_archived_paths=invalid_expected_archived_paths,
-        invalid_confluence_paths=invalid_confluence_paths,
-        confluence_unmapped_entries=confluence_unmapped_entries,
-    )
+    incorrectly_accessible_non_published_urls: List[str] = []
 
     e3sm_records: List[SensitiveTermRecord] = []
     confluence_records: List[SensitiveTermRecord] = []
@@ -1064,15 +1077,15 @@ def main():
             list_sensitive_terms=list_search_phrases,
         )
         relevant_links: Dict[str, Dict[str, int]] = links.links_with_sensitive_terms
-        with open(OUTPUT_FOUND_PHRASES, "w", encoding="utf-8") as f:
-            for link in relevant_links:
-                f.write(f"{link}: {relevant_links[link]}\n")
 
         expected_archived_urls_set: Set[str] = set(expected_archived_urls_expanded)
         known_ok_urls_set: Set[str] = set(list_known_ok_paths)
         keep_unchanged_urls_set: Set[str] = set(list_keep_unchanged_paths)
 
-        wordpress_lines = parse_wordpress_sensitive_terms_file(OUTPUT_FOUND_PHRASES)
+        wordpress_lines_input: List[str] = [
+            f"{link}: {relevant_links[link]}" for link in relevant_links
+        ]
+        wordpress_lines = parse_wordpress_sensitive_terms_lines(wordpress_lines_input)
         for _, line in wordpress_lines:
             record = parse_wordpress_record(
                 line=line,
@@ -1106,47 +1119,50 @@ def main():
                     f"Confluence sensitive terms input not found: {INPUT_CONFLUENCE_SENSITIVE_TERMS}"
                 )
 
-        write_sensitive_terms_report(
-            output_path=OUTPUT_SENSITIVE_TERMS_REPORT,
-            e3sm_records=e3sm_records,
-            confluence_records=confluence_records,
-        )
-
-        confluence_published_sensitive_records: List[SensitiveTermRecord] = [
-            record
-            for record in confluence_records
-            if record.classification == CLASS_PUBLISHED
-        ]
-
-        write_action_items_report(
-            output_path=OUTPUT_ACTION_ITEMS_REPORT,
-            should_be_archived=should_be_archived,
-            published_but_not_in_confluence=published_but_not_in_confluence,
-            confluence_published_sensitive_records=confluence_published_sensitive_records,
-        )
-
         print(
             f"Checking {len(non_published_urls)} non-published e3sm.org pages are inaccessible"
         )
-        with open(
-            OUTPUT_INCORRECTLY_ACCESSIBLE_E3SM_ORG_PATHS, "w", encoding="utf-8"
-        ) as f:
-            for e3sm_url in non_published_urls:
-                e3sm_url_status = get_e3sm_url_status(e3sm_url)
-                if e3sm_url_status == "link works not logged-in":
-                    f.write(f"{e3sm_url}\n")
-    else:
-        write_sensitive_terms_report(
-            output_path=OUTPUT_SENSITIVE_TERMS_REPORT,
-            e3sm_records=[],
-            confluence_records=[],
-        )
-        write_action_items_report(
-            output_path=OUTPUT_ACTION_ITEMS_REPORT,
-            should_be_archived=should_be_archived,
-            published_but_not_in_confluence=published_but_not_in_confluence,
-            confluence_published_sensitive_records=[],
-        )
+        for e3sm_url in non_published_urls:
+            e3sm_url_status = get_e3sm_url_status(e3sm_url)
+            if e3sm_url_status == "link works not logged-in":
+                incorrectly_accessible_non_published_urls.append(e3sm_url)
+
+    write_markdown_report(
+        output_path=OUTPUT_MARKDOWN_REPORT,
+        all_urls_by_status=all_urls_by_status,
+        valid_whitelisted_paths=valid_whitelisted_paths,
+        valid_expected_archived_paths=valid_expected_archived_paths,
+        valid_confluence_paths=valid_confluence_paths,
+        whitelisted_but_not_published=whitelisted_but_not_published,
+        published_but_not_whitelisted=published_but_not_whitelisted,
+        should_be_archived=should_be_archived,
+        published_but_not_in_confluence=published_but_not_in_confluence,
+        published_not_whitelisted_and_not_in_confluence=published_not_whitelisted_and_not_in_confluence,
+        incorrectly_accessible_non_published_urls=incorrectly_accessible_non_published_urls,
+        invalid_whitelisted_paths=invalid_whitelisted_paths,
+        invalid_expected_archived_paths=invalid_expected_archived_paths,
+        invalid_confluence_paths=invalid_confluence_paths,
+        confluence_unmapped_entries=confluence_unmapped_entries,
+    )
+
+    write_sensitive_terms_report(
+        output_path=OUTPUT_SENSITIVE_TERMS_REPORT,
+        e3sm_records=e3sm_records,
+        confluence_records=confluence_records,
+    )
+
+    confluence_published_sensitive_records: List[SensitiveTermRecord] = [
+        record
+        for record in confluence_records
+        if record.classification == CLASS_PUBLISHED
+    ]
+
+    write_action_items_report(
+        output_path=OUTPUT_ACTION_ITEMS_REPORT,
+        should_be_archived=should_be_archived,
+        published_not_whitelisted_and_not_in_confluence=published_not_whitelisted_and_not_in_confluence,
+        confluence_published_sensitive_records=confluence_published_sensitive_records,
+    )
 
 
 if __name__ == "__main__":
