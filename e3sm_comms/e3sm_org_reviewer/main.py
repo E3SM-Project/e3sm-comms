@@ -385,8 +385,18 @@ def write_summary_table(
 
     e3sm_with_confluence: Set[str] = all_urls_set.intersection(confluence_valid_set)
     e3sm_without_confluence: Set[str] = all_urls_set - confluence_valid_set
+
     confluence_not_valid_count: int = len(invalid_confluence_paths) + len(
         confluence_unmapped_entries
+    )
+    total_confluence_urls: int = len(confluence_valid_set) + confluence_not_valid_count
+    total_e3sm_urls: int = len(all_urls_set)
+
+    confluence_counts_match: bool = (
+        confluence_not_valid_count + len(e3sm_with_confluence) == total_confluence_urls
+    )
+    e3sm_counts_match: bool = (
+        len(e3sm_without_confluence) + len(e3sm_with_confluence) == total_e3sm_urls
     )
 
     file_obj.write("\n## Confluence Mapping Summary\n\n")
@@ -401,7 +411,21 @@ def write_summary_table(
     file_obj.write(
         f"| e3sm.org paths that do have a Confluence counterpart | {len(e3sm_with_confluence)} |\n"
     )
+    file_obj.write(f"| Total Confluence-derived paths | {total_confluence_urls} |\n")
+    file_obj.write(f"| Total e3sm.org paths | {total_e3sm_urls} |\n")
     file_obj.write("\n")
+
+    file_obj.write("Validation:\n\n")
+    file_obj.write(
+        f"- Confluence counts match: "
+        f"{confluence_not_valid_count} + {len(e3sm_with_confluence)} = {total_confluence_urls} "
+        f"({'yes' if confluence_counts_match else 'no'})\n"
+    )
+    file_obj.write(
+        f"- e3sm.org counts match: "
+        f"{len(e3sm_without_confluence)} + {len(e3sm_with_confluence)} = {total_e3sm_urls} "
+        f"({'yes' if e3sm_counts_match else 'no'})\n\n"
+    )
 
 
 def get_status_counts_for_urls(
