@@ -7,8 +7,8 @@ This package is for implementing the software needs of the E3SM Communications t
 ### Simple commands
 
 `e3sm-comms-e3sm-org-reviewer`
-- input: txt file listing e3sm.org pages to review, txt file containing phrases to search for, txt file listing e3sm.org pages that should be marked as archived
-- output: txt file listing e3sm.org pages containing those phrases, txt file listing e3sm.org pages that are accessible even though they should be archived
+- input: txt file listing e3sm.org pages to review, txt file containing phrases to search for, txt file listing e3sm.org pages that should be marked as archived, xml file of Wordpress pages, xml file of Wordpress posts. Note: xml files can be obtained from WordPress under Tools > Export.
+- output: txt file listing e3sm.org pages containing those phrases, txt file listing e3sm.org pages that are accessible even though they should be archived, txt file of page URLs found in the xml, txt file of post URLs found in the xml.
 
 `e3sm-comms-html-reviewer`
 - input: 1 txt file of html copied from WordPress that includes yellow highlights left over from Confluence.
