@@ -26,7 +26,7 @@ OUTPUT_INCORRECTLY_ACCESSIBLE_E3SM_ORG_PATHS: str = (
     f"{IO_DIR}/output/e3sm_org_reviewer/incorrectly_accessible_web_pages.txt"
 )
 
-RUN_CHECKS: bool = False  # Set to False for faster debugging
+RUN_CHECKS: bool = True  # Set to False for faster debugging
 
 CONFLUENCE_SPACE = "EPWCD"
 CONFLUENCE_BASE = "https://e3sm.atlassian.net/wiki"
