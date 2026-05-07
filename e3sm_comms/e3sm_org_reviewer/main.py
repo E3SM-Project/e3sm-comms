@@ -40,6 +40,7 @@ OUTPUT_SENSITIVE_TERMS_REPORT: str = (
 OUTPUT_INCORRECTLY_ACCESSIBLE_E3SM_ORG_PATHS: str = (
     f"{IO_DIR}/output/e3sm_org_reviewer/incorrectly_accessible_web_pages.txt"
 )
+OUTPUT_ACTION_ITEMS_REPORT: str = f"{IO_DIR}/output/e3sm_org_reviewer/action_items.md"
 
 RUN_CHECKS: bool = True  # Set to False for faster debugging
 
@@ -432,6 +433,54 @@ def write_markdown_report(
             "Confluence pages with no mappable e3sm.org URL",
             confluence_unmapped_entries,
         )
+
+
+def write_action_items_report(
+    output_path: str,
+    should_be_archived: List[str],
+    published_but_not_in_confluence: List[str],
+    confluence_published_sensitive_records: List[SensitiveTermRecord],
+) -> None:
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("# Action Items Report\n\n")
+
+        f.write("## Summary\n\n")
+        f.write("| Action Area | Count |\n")
+        f.write("| --- | ---: |\n")
+        f.write(
+            f"| Expecting to be archived, but not yet archived | {len(should_be_archived)} |\n"
+        )
+        f.write(
+            f"| Published but no matching Confluence path found | {len(published_but_not_in_confluence)} |\n"
+        )
+        f.write(
+            f"| Confluence pages with sensitive terms mapped to published e3sm.org pages | {len(confluence_published_sensitive_records)} |\n"
+        )
+        f.write("\n")
+
+        write_markdown_section(
+            f,
+            "Expecting to be archived, but not yet archived",
+            should_be_archived,
+        )
+
+        write_markdown_section(
+            f,
+            "Published but no matching Confluence path found",
+            published_but_not_in_confluence,
+        )
+
+        f.write(
+            "## Confluence pages with sensitive terms mapped to published e3sm.org pages\n\n"
+        )
+        if not confluence_published_sensitive_records:
+            f.write("_None._\n\n")
+        else:
+            for idx, record in enumerate(
+                confluence_published_sensitive_records, start=1
+            ):
+                f.write(f"{idx}. {format_confluence_record(record)}\n")
+            f.write("\n")
 
 
 def parse_dict(dict_str: str) -> Optional[Dict[str, int]]:
@@ -1063,6 +1112,19 @@ def main():
             confluence_records=confluence_records,
         )
 
+        confluence_published_sensitive_records: List[SensitiveTermRecord] = [
+            record
+            for record in confluence_records
+            if record.classification == CLASS_PUBLISHED
+        ]
+
+        write_action_items_report(
+            output_path=OUTPUT_ACTION_ITEMS_REPORT,
+            should_be_archived=should_be_archived,
+            published_but_not_in_confluence=published_but_not_in_confluence,
+            confluence_published_sensitive_records=confluence_published_sensitive_records,
+        )
+
         print(
             f"Checking {len(non_published_urls)} non-published e3sm.org pages are inaccessible"
         )
@@ -1078,6 +1140,12 @@ def main():
             output_path=OUTPUT_SENSITIVE_TERMS_REPORT,
             e3sm_records=[],
             confluence_records=[],
+        )
+        write_action_items_report(
+            output_path=OUTPUT_ACTION_ITEMS_REPORT,
+            should_be_archived=should_be_archived,
+            published_but_not_in_confluence=published_but_not_in_confluence,
+            confluence_published_sensitive_records=[],
         )
 
 
