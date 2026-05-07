@@ -1,6 +1,6 @@
 import xml.etree.ElementTree as ET
 from collections import defaultdict
-from typing import Dict, List, TextIO
+from typing import Dict, List, Set, TextIO
 
 from e3sm_comms.page_reviewer.utils_base import LinkedURLs, get_e3sm_url_status
 from e3sm_comms.utils import IO_DIR
@@ -55,38 +55,47 @@ def main():
 
     all_urls: List[str] = get_all_urls(all_urls_by_status)
 
-    invalid_whitelisted_paths: List[str] = get_list_difference(
+    invalid_whitelisted_paths: List[str] = get_invalid_patterns(
         list_whitelisted_paths, all_urls
     )
-    valid_whitelisted_paths: List[str] = get_list_difference(
-        list_whitelisted_paths, invalid_whitelisted_paths
-    )
+    valid_whitelisted_paths: List[str] = [
+        path for path in list_whitelisted_paths if path not in invalid_whitelisted_paths
+    ]
 
-    invalid_expected_archived_paths: List[str] = get_list_difference(
+    invalid_expected_archived_paths: List[str] = get_invalid_patterns(
         list_expected_archived_paths, all_urls
     )
-    valid_expected_archived_paths: List[str] = get_list_difference(
-        list_expected_archived_paths, invalid_expected_archived_paths
-    )
+    valid_expected_archived_paths: List[str] = [
+        path
+        for path in list_expected_archived_paths
+        if path not in invalid_expected_archived_paths
+    ]
 
     print(
-        f"Of {len(list_whitelisted_paths)} whitelisted paths, {len(valid_whitelisted_paths)} are valid URLs"
+        f"Of {len(list_whitelisted_paths)} whitelisted paths, {len(valid_whitelisted_paths)} are valid URLs/patterns"
     )
     print(
-        f"Of {len(list_expected_archived_paths)} expected archived paths, {len(valid_expected_archived_paths)} are valid URLs"
+        f"Of {len(list_expected_archived_paths)} expected archived paths, {len(valid_expected_archived_paths)} are valid URLs/patterns"
     )
 
     published_urls: List[str] = all_urls_by_status.get("publish", [])
     archived_urls: List[str] = all_urls_by_status.get("archive", [])
 
+    whitelisted_urls_expanded: List[str] = expand_patterns_to_urls(
+        valid_whitelisted_paths, all_urls
+    )
+    expected_archived_urls_expanded: List[str] = expand_patterns_to_urls(
+        valid_expected_archived_paths, all_urls
+    )
+
     whitelisted_but_not_published: List[str] = get_list_difference(
-        valid_whitelisted_paths, published_urls
+        whitelisted_urls_expanded, published_urls
     )
     published_but_not_whitelisted: List[str] = get_list_difference(
-        published_urls, valid_whitelisted_paths
+        published_urls, whitelisted_urls_expanded
     )
     should_be_archived: List[str] = get_list_difference(
-        valid_expected_archived_paths, archived_urls
+        expected_archived_urls_expanded, archived_urls
     )
 
     print(f"Whitelisted, but not published: {len(whitelisted_but_not_published)}")
@@ -112,12 +121,15 @@ def main():
         print(
             f"Checking {len(list_whitelisted_paths)} whitelisted e3sm.org pages for search phrases"
         )
+        expanded_whitelist_for_checks: List[str] = expand_patterns_to_urls(
+            list_whitelisted_paths, all_urls
+        )
         with open(INPUT_SEARCH_PHRASES, "r", encoding="utf-8") as f:
             terms: List[str] = [line.rstrip("\n").lower() for line in f]
             list_search_phrases: List[str] = sorted(terms)
 
         links = LinkedURLs(
-            list_whitelisted_paths,
+            expanded_whitelist_for_checks,
             scan_links_for_sensitive_terms=True,
             list_sensitive_terms=list_search_phrases,
         )
@@ -194,12 +206,17 @@ def write_summary_table(
     valid_expected_archived_paths: List[str],
 ) -> None:
     statuses: List[str] = sorted(all_urls_by_status.keys())
+    all_urls: List[str] = get_all_urls(all_urls_by_status)
 
-    whitelist_set = set(valid_whitelisted_paths)
-    expected_archived_set = set(valid_expected_archived_paths)
+    whitelist_set: Set[str] = set(
+        expand_patterns_to_urls(valid_whitelisted_paths, all_urls)
+    )
+    expected_archived_set: Set[str] = set(
+        expand_patterns_to_urls(valid_expected_archived_paths, all_urls)
+    )
     accounted_for_set = whitelist_set.union(expected_archived_set)
 
-    all_urls_set = set(get_all_urls(all_urls_by_status))
+    all_urls_set = set(all_urls)
     remaining_set = all_urls_set - accounted_for_set
 
     rows = [
@@ -322,3 +339,46 @@ def get_all_non_published_urls(urls_by_status: Dict[str, List[str]]) -> List[str
         if status != "publish":
             non_published_urls.extend(urls)
     return sorted(non_published_urls)
+
+
+def matches_pattern(pattern: str, url: str) -> bool:
+    if "*" not in pattern:
+        return pattern == url
+
+    if pattern.count("*") == 1 and pattern.endswith("*"):
+        prefix = pattern[:-1]
+        return url.startswith(prefix)
+
+    parts = pattern.split("*")
+    position = 0
+    for i, part in enumerate(parts):
+        if not part:
+            continue
+        found_at = url.find(part, position)
+        if found_at == -1:
+            return False
+        if i == 0 and not pattern.startswith("*") and found_at != 0:
+            return False
+        position = found_at + len(part)
+
+    if not pattern.endswith("*") and parts[-1] and not url.endswith(parts[-1]):
+        return False
+
+    return True
+
+
+def expand_patterns_to_urls(patterns: List[str], all_urls: List[str]) -> List[str]:
+    matched_urls: Set[str] = set()
+    for pattern in patterns:
+        for url in all_urls:
+            if matches_pattern(pattern, url):
+                matched_urls.add(url)
+    return sorted(matched_urls)
+
+
+def get_invalid_patterns(patterns: List[str], all_urls: List[str]) -> List[str]:
+    invalid_patterns: List[str] = []
+    for pattern in patterns:
+        if not any(matches_pattern(pattern, url) for url in all_urls):
+            invalid_patterns.append(pattern)
+    return sorted(invalid_patterns)
