@@ -210,8 +210,8 @@ def write_summary_table(
     ]
 
     file_obj.write("# Summary\n\n")
-    file_obj.write("| Type | " + " | ".join(statuses) + " |\n")
-    file_obj.write("| --- | " + " | ".join("---" for _ in statuses) + " |\n")
+    file_obj.write("| Type | " + " | ".join(statuses) + " | Total |\n")
+    file_obj.write("| --- | " + " | ".join("---" for _ in statuses) + " | --- |\n")
 
     for row_name, row_urls in rows:
         counts = get_status_counts_for_urls(
@@ -219,10 +219,11 @@ def write_summary_table(
             all_urls_by_status=all_urls_by_status,
             statuses=statuses,
         )
+        total_count = sum(counts.values())
         file_obj.write(
             f"| {row_name} | "
             + " | ".join(str(counts[status]) for status in statuses)
-            + " |\n"
+            + f" | {total_count} |\n"
         )
 
     file_obj.write("\n")
