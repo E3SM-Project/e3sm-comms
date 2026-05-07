@@ -15,10 +15,5 @@ e3sm-comms-website-reviewer
 
 echo "Step 2. Review e3sm.org"
 cp ${IO_DIR}/output/website_reviewer/hierarchical_outline.txt ${IO_DIR}/input/e3sm_org_reviewer/hierarchical_outline.txt
+cp ${IO_DIR}/output/website_reviewer/sensitive_terms.txt ${IO_DIR}/input/e3sm_org_reviewer/confluence_sensitive_terms.txt
 e3sm-comms-e3sm-org-reviewer
-
-echo "Step 3. Synthesize into report"
-cp ${IO_DIR}/output/website_reviewer/sensitive_terms.txt ${IO_DIR}/input/term_reviewer/confluence_sensitive_terms.txt
-cp ${IO_DIR}/output/e3sm_org_reviewer/found_phrases.txt ${IO_DIR}/input/term_reviewer/wordpress_sensitive_terms.txt
-e3sm-comms-term-reviewer
-echo "Output: ${IO_DIR}/output/term_reviewer/sensitive_terms.md"
