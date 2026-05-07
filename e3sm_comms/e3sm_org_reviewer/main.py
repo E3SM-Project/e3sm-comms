@@ -218,6 +218,7 @@ def main():
         all_urls_by_status=all_urls_by_status,
         valid_whitelisted_paths=valid_whitelisted_paths,
         valid_expected_archived_paths=valid_expected_archived_paths,
+        valid_confluence_paths=valid_confluence_paths,
         whitelisted_but_not_published=whitelisted_but_not_published,
         published_but_not_whitelisted=published_but_not_whitelisted,
         should_be_archived=should_be_archived,
@@ -267,6 +268,7 @@ def write_markdown_report(
     all_urls_by_status: Dict[str, List[str]],
     valid_whitelisted_paths: List[str],
     valid_expected_archived_paths: List[str],
+    valid_confluence_paths: List[str],
     whitelisted_but_not_published: List[str],
     published_but_not_whitelisted: List[str],
     should_be_archived: List[str],
@@ -282,6 +284,9 @@ def write_markdown_report(
             all_urls_by_status=all_urls_by_status,
             valid_whitelisted_paths=valid_whitelisted_paths,
             valid_expected_archived_paths=valid_expected_archived_paths,
+            valid_confluence_paths=valid_confluence_paths,
+            invalid_confluence_paths=invalid_confluence_paths,
+            confluence_unmapped_entries=confluence_unmapped_entries,
         )
 
         f.write("# Valid Paths\n\n")
@@ -334,6 +339,9 @@ def write_summary_table(
     all_urls_by_status: Dict[str, List[str]],
     valid_whitelisted_paths: List[str],
     valid_expected_archived_paths: List[str],
+    valid_confluence_paths: List[str],
+    invalid_confluence_paths: List[str],
+    confluence_unmapped_entries: List[str],
 ) -> None:
     statuses: List[str] = sorted(all_urls_by_status.keys())
     all_urls: List[str] = get_all_urls(all_urls_by_status)
@@ -344,16 +352,15 @@ def write_summary_table(
     expected_archived_set: Set[str] = set(
         expand_patterns_to_urls(valid_expected_archived_paths, all_urls)
     )
-    accounted_for_set = whitelist_set.union(expected_archived_set)
-
-    all_urls_set = set(all_urls)
-    remaining_set = all_urls_set - accounted_for_set
+    both_set: Set[str] = whitelist_set.intersection(expected_archived_set)
+    neither_set: Set[str] = set(all_urls) - whitelist_set.union(expected_archived_set)
 
     rows = [
         ("Whitelisted URLs", whitelist_set),
         ("Expected archived", expected_archived_set),
-        ("All remaining", remaining_set),
-        ("TOTAL", all_urls_set),
+        ("Both whitelisted and expected archived", both_set),
+        ("Neither whitelisted nor expected archived", neither_set),
+        ("TOTAL", set(all_urls)),
     ]
 
     file_obj.write("# Summary\n\n")
@@ -373,6 +380,27 @@ def write_summary_table(
             + f" | {total_count} |\n"
         )
 
+    confluence_valid_set: Set[str] = set(valid_confluence_paths)
+    all_urls_set: Set[str] = set(all_urls)
+
+    e3sm_with_confluence: Set[str] = all_urls_set.intersection(confluence_valid_set)
+    e3sm_without_confluence: Set[str] = all_urls_set - confluence_valid_set
+    confluence_not_valid_count: int = len(invalid_confluence_paths) + len(
+        confluence_unmapped_entries
+    )
+
+    file_obj.write("\n## Confluence Mapping Summary\n\n")
+    file_obj.write("| Type | Count |\n")
+    file_obj.write("| --- | --- |\n")
+    file_obj.write(
+        f"| Confluence paths that do not map to a valid e3sm.org path | {confluence_not_valid_count} |\n"
+    )
+    file_obj.write(
+        f"| e3sm.org paths that do not have a Confluence path associated with them | {len(e3sm_without_confluence)} |\n"
+    )
+    file_obj.write(
+        f"| e3sm.org paths that do have a Confluence counterpart | {len(e3sm_with_confluence)} |\n"
+    )
     file_obj.write("\n")
 
 
