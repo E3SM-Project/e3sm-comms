@@ -1004,8 +1004,11 @@ def main():
         if path not in invalid_confluence_paths
     ]
 
+    whitelisted_urls_expanded: List[str] = expand_patterns_to_urls(
+        valid_whitelisted_paths, all_urls
+    )
     print(
-        f"Of {len(list_whitelisted_paths)} whitelisted paths, {len(valid_whitelisted_paths)} are valid URLs/patterns"
+        f"Of {len(list_whitelisted_paths)} whitelisted paths, {len(valid_whitelisted_paths)} are valid URLs/patterns. Expanding patterns, it's {len(whitelisted_urls_expanded)} valid URLs."
     )
     print(
         f"Of {len(list_expected_archived_paths)} expected archived paths, {len(valid_expected_archived_paths)} are valid URLs/patterns"
@@ -1021,9 +1024,6 @@ def main():
     published_urls: List[str] = all_urls_by_status.get("publish", [])
     archived_urls: List[str] = all_urls_by_status.get("archive", [])
 
-    whitelisted_urls_expanded: List[str] = expand_patterns_to_urls(
-        valid_whitelisted_paths, all_urls
-    )
     expected_archived_urls_expanded: List[str] = expand_patterns_to_urls(
         valid_expected_archived_paths, all_urls
     )
@@ -1067,17 +1067,14 @@ def main():
 
     if RUN_CHECKS:
         print(
-            f"Checking {len(list_whitelisted_paths)} whitelisted e3sm.org pages for search phrases"
-        )
-        expanded_whitelist_for_checks: List[str] = expand_patterns_to_urls(
-            list_whitelisted_paths, all_urls
+            f"Checking {len(whitelisted_urls_expanded)} whitelisted e3sm.org pages for search phrases"
         )
         with open(INPUT_SEARCH_PHRASES, "r", encoding="utf-8") as f:
             terms: List[str] = [line.rstrip("\n").lower() for line in f]
             list_search_phrases: List[str] = sorted(terms)
 
         links = LinkedURLs(
-            expanded_whitelist_for_checks,
+            whitelisted_urls_expanded,
             scan_links_for_sensitive_terms=True,
             list_sensitive_terms=list_search_phrases,
         )
