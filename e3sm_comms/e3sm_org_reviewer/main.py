@@ -1,8 +1,12 @@
 import xml.etree.ElementTree as ET
 from collections import defaultdict
-from typing import Dict, List, Set, TextIO
+from typing import Dict, List, Set, TextIO, Tuple
 
-from e3sm_comms.page_reviewer.utils_base import LinkedURLs, get_e3sm_url_status
+from e3sm_comms.page_reviewer.utils_base import (
+    LinkedURLs,
+    get_e3sm_url_status,
+    map_confluence_to_e3sm,
+)
 from e3sm_comms.utils import IO_DIR
 
 INPUT_XML_PAGES: str = f"{IO_DIR}/input/e3sm_org_reviewer/wordpress_pages.xml"
@@ -12,6 +16,9 @@ INPUT_EXPECTED_ARCHIVED_E3SM_ORG_PATHS: str = (
     f"{IO_DIR}/input/shared/archived_web_pages.txt"
 )
 INPUT_SEARCH_PHRASES: str = f"{IO_DIR}/input/shared/sensitive_terms.txt"
+INPUT_CONFLUENCE_HIERARCHY: str = (
+    f"{IO_DIR}/input/e3sm_org_reviewer/hierarchical_outline.txt"
+)
 
 OUTPUT_MARKDOWN_REPORT: str = f"{IO_DIR}/output/e3sm_org_reviewer/path_report.md"
 OUTPUT_FOUND_PHRASES: str = f"{IO_DIR}/output/e3sm_org_reviewer/found_phrases.txt"
@@ -20,6 +27,80 @@ OUTPUT_INCORRECTLY_ACCESSIBLE_E3SM_ORG_PATHS: str = (
 )
 
 RUN_CHECKS: bool = False  # Set to False for faster debugging
+
+CONFLUENCE_SPACE = "EPWCD"
+CONFLUENCE_BASE = "https://e3sm.atlassian.net/wiki"
+
+
+def build_confluence_url(page_id: str, space_key: str = CONFLUENCE_SPACE) -> str:
+    return f"{CONFLUENCE_BASE}/spaces/{space_key}/pages/{page_id}"
+
+
+def parse_confluence_hierarchy_file(input_file: str) -> List[Tuple[str, str]]:
+    """
+    Parses a hierarchy file whose indentation only indicates nesting.
+
+    Expected line format:
+        <optional spaces><page_id>: <title>
+
+    Returns:
+        List of (page_id, title)
+    """
+    parsed: List[Tuple[str, str]] = []
+
+    with open(input_file, "r", encoding="utf-8") as f:
+        for line_number, raw_line in enumerate(f, start=1):
+            line = raw_line.rstrip("\n")
+            if not line.strip():
+                continue
+
+            stripped = line.lstrip()
+
+            if ":" not in stripped:
+                print(f"Skipping malformed Confluence line {line_number}: {line}")
+                continue
+
+            page_id, title = stripped.split(":", 1)
+            page_id = page_id.strip()
+            title = title.strip()
+
+            if not page_id.isdigit():
+                print(
+                    f"Skipping Confluence line {line_number} with non-numeric page id: {line}"
+                )
+                continue
+
+            parsed.append((page_id, title))
+
+    return parsed
+
+
+def get_confluence_predicted_e3sm_urls(
+    input_file: str,
+) -> Tuple[List[str], List[str]]:
+    """
+    Reads a Confluence hierarchy file and returns:
+    - valid_predicted_urls: predicted e3sm.org URLs successfully mapped from Confluence
+    - unmapped_confluence_pages: human-readable Confluence entries that could not be mapped
+    """
+    valid_predicted_urls: List[str] = []
+    unmapped_confluence_pages: List[str] = []
+
+    for page_id, title in parse_confluence_hierarchy_file(input_file):
+        confluence_url = build_confluence_url(page_id)
+        try:
+            e3sm_url = map_confluence_to_e3sm(confluence_url, page_title=title)
+            if e3sm_url:
+                valid_predicted_urls.append(e3sm_url)
+            else:
+                unmapped_confluence_pages.append(f"{title}: {confluence_url}")
+        except Exception as exc:
+            print(
+                f"Could not map Confluence URL to e3sm.org URL for {confluence_url}: {exc}"
+            )
+            unmapped_confluence_pages.append(f"{title}: {confluence_url}")
+
+    return sorted(set(valid_predicted_urls)), sorted(unmapped_confluence_pages)
 
 
 def main():
@@ -71,11 +152,30 @@ def main():
         if path not in invalid_expected_archived_paths
     ]
 
+    confluence_predicted_urls, confluence_unmapped_entries = (
+        get_confluence_predicted_e3sm_urls(INPUT_CONFLUENCE_HIERARCHY)
+    )
+    invalid_confluence_paths: List[str] = get_invalid_patterns(
+        confluence_predicted_urls, all_urls
+    )
+    valid_confluence_paths: List[str] = [
+        path
+        for path in confluence_predicted_urls
+        if path not in invalid_confluence_paths
+    ]
+
     print(
         f"Of {len(list_whitelisted_paths)} whitelisted paths, {len(valid_whitelisted_paths)} are valid URLs/patterns"
     )
     print(
         f"Of {len(list_expected_archived_paths)} expected archived paths, {len(valid_expected_archived_paths)} are valid URLs/patterns"
+    )
+    print(
+        f"Of {len(confluence_predicted_urls)} predicted Confluence e3sm.org paths, "
+        f"{len(valid_confluence_paths)} are valid URLs"
+    )
+    print(
+        f"Confluence pages with no predicted e3sm.org URL: {len(confluence_unmapped_entries)}"
     )
 
     published_urls: List[str] = all_urls_by_status.get("publish", [])
@@ -97,12 +197,21 @@ def main():
     should_be_archived: List[str] = get_list_difference(
         expected_archived_urls_expanded, archived_urls
     )
+    published_but_not_in_confluence: List[str] = get_list_difference(
+        published_urls, valid_confluence_paths
+    )
 
     print(f"Whitelisted, but not published: {len(whitelisted_but_not_published)}")
     print(f"Published, but not whitelisted: {len(published_but_not_whitelisted)}")
     print(f"Not archived, but should be archived: {len(should_be_archived)}")
+    print(
+        f"Published, but no matching Confluence path found: {len(published_but_not_in_confluence)}"
+    )
     print(f"Invalid whitelist paths: {len(invalid_whitelisted_paths)}")
     print(f"Invalid archive-input paths: {len(invalid_expected_archived_paths)}")
+    print(
+        f"Invalid Confluence-predicted e3sm.org paths: {len(invalid_confluence_paths)}"
+    )
 
     write_markdown_report(
         output_path=OUTPUT_MARKDOWN_REPORT,
@@ -112,8 +221,11 @@ def main():
         whitelisted_but_not_published=whitelisted_but_not_published,
         published_but_not_whitelisted=published_but_not_whitelisted,
         should_be_archived=should_be_archived,
+        published_but_not_in_confluence=published_but_not_in_confluence,
         invalid_whitelisted_paths=invalid_whitelisted_paths,
         invalid_expected_archived_paths=invalid_expected_archived_paths,
+        invalid_confluence_paths=invalid_confluence_paths,
+        confluence_unmapped_entries=confluence_unmapped_entries,
     )
 
     # Run checks
@@ -158,8 +270,11 @@ def write_markdown_report(
     whitelisted_but_not_published: List[str],
     published_but_not_whitelisted: List[str],
     should_be_archived: List[str],
+    published_but_not_in_confluence: List[str],
     invalid_whitelisted_paths: List[str],
     invalid_expected_archived_paths: List[str],
+    invalid_confluence_paths: List[str],
+    confluence_unmapped_entries: List[str],
 ) -> None:
     with open(output_path, "w", encoding="utf-8") as f:
         write_summary_table(
@@ -185,6 +300,11 @@ def write_markdown_report(
             "Expecting to be archived, but not yet archived",
             should_be_archived,
         )
+        write_markdown_section(
+            f,
+            "Published but no matching Confluence path found",
+            published_but_not_in_confluence,
+        )
 
         f.write("# Invalid Paths\n\n")
         write_markdown_section(
@@ -196,6 +316,16 @@ def write_markdown_report(
             f,
             "Identified in archive input",
             invalid_expected_archived_paths,
+        )
+        write_markdown_section(
+            f,
+            "Identified in Confluence input",
+            invalid_confluence_paths,
+        )
+        write_markdown_section(
+            f,
+            "Confluence pages with no mappable e3sm.org URL",
+            confluence_unmapped_entries,
         )
 
 
