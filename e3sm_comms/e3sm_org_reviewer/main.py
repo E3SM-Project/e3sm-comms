@@ -13,16 +13,7 @@ INPUT_EXPECTED_ARCHIVED_E3SM_ORG_PATHS: str = (
 )
 INPUT_SEARCH_PHRASES: str = f"{IO_DIR}/input/shared/sensitive_terms.txt"
 
-OUTPUT_WHITELISTED_NOT_PUBLISHED: str = (
-    f"{IO_DIR}/output/e3sm_org_reviewer/whitelisted_not_published.txt"
-)
-OUTPUT_PUBLISHED_NOT_WHITELISTED: str = (
-    f"{IO_DIR}/output/e3sm_org_reviewer/published_not_whitelisted.txt"
-)
-OUTPUT_SHOULD_BE_ARCHIVED: str = (
-    f"{IO_DIR}/output/e3sm_org_reviewer/should_be_archived.txt"
-)
-OUTPUT_EXTRA_ARCHIVED: str = f"{IO_DIR}/output/e3sm_org_reviewer/extra_archived.txt"
+OUTPUT_MARKDOWN_REPORT: str = f"{IO_DIR}/output/e3sm_org_reviewer/path_report.md"
 OUTPUT_FOUND_PHRASES: str = f"{IO_DIR}/output/e3sm_org_reviewer/found_phrases.txt"
 OUTPUT_INCORRECTLY_ACCESSIBLE_E3SM_ORG_PATHS: str = (
     f"{IO_DIR}/output/e3sm_org_reviewer/incorrectly_accessible_web_pages.txt"
@@ -32,7 +23,7 @@ RUN_CHECKS: bool = False  # Set to False for faster debugging
 
 
 def main():
-    # Review XML exports from WordPress #######################################
+    # Review XML exports from WordPress
     pages_by_status: Dict[str, List[str]] = get_wordpress_urls_by_status(
         INPUT_XML_PAGES, "page"
     )
@@ -42,7 +33,6 @@ def main():
     num_pages: int = get_total_count(pages_by_status)
     num_posts: int = get_total_count(posts_by_status)
     print(f"Found {num_pages} pages, {num_posts} posts")
-    #    ['archive', 'draft', 'future', 'pending', 'private', 'publish']
     print(
         f"Pages have status in {pages_by_status.keys()}; posts have status in {posts_by_status.keys()}"
     )
@@ -50,40 +40,35 @@ def main():
     all_urls_by_status: Dict[str, List[str]] = get_combined_urls_by_status(
         pages_by_status, posts_by_status
     )
-    if "publish" in all_urls_by_status:
-        print(f"Found {len(all_urls_by_status['publish'])} published URLs")
-    if "archive" in all_urls_by_status:
-        print(f"Found {len(all_urls_by_status['archive'])} archived URLs")
-    if "draft" in all_urls_by_status:
-        print(f"Found {len(all_urls_by_status['draft'])} draft URLs")
-    if "future" in all_urls_by_status:
-        print(f"Found {len(all_urls_by_status['future'])} future URLs")
-    if "pending" in all_urls_by_status:
-        print(f"Found {len(all_urls_by_status['pending'])} pending URLs")
-    if "private" in all_urls_by_status:
-        print(f"Found {len(all_urls_by_status['private'])} private URLs")
+    print_status_counts(all_urls_by_status)
+
     non_published_urls: List[str] = get_all_non_published_urls(all_urls_by_status)
     print(f"Total non-published URLs: {len(non_published_urls)}")
 
-    # Compare with expectations ###############################################
+    # Compare with expectations
     with open(INPUT_WHITELIST, "r", encoding="utf-8") as f:
-        list_whitelisted_paths: List[str] = [line.strip() for line in f]
+        list_whitelisted_paths: List[str] = [line.strip() for line in f if line.strip()]
     with open(INPUT_EXPECTED_ARCHIVED_E3SM_ORG_PATHS, "r", encoding="utf-8") as f:
-        list_expected_archived_paths: List[str] = [line.strip() for line in f]
+        list_expected_archived_paths: List[str] = [
+            line.strip() for line in f if line.strip()
+        ]
 
     all_urls: List[str] = get_all_urls(all_urls_by_status)
+
     invalid_whitelisted_paths: List[str] = get_list_difference(
         list_whitelisted_paths, all_urls
     )
     valid_whitelisted_paths: List[str] = get_list_difference(
         list_whitelisted_paths, invalid_whitelisted_paths
     )
+
     invalid_expected_archived_paths: List[str] = get_list_difference(
         list_expected_archived_paths, all_urls
     )
     valid_expected_archived_paths: List[str] = get_list_difference(
         list_expected_archived_paths, invalid_expected_archived_paths
     )
+
     print(
         f"Of {len(list_whitelisted_paths)} whitelisted paths, {len(valid_whitelisted_paths)} are valid URLs"
     )
@@ -91,37 +76,35 @@ def main():
         f"Of {len(list_expected_archived_paths)} expected archived paths, {len(valid_expected_archived_paths)} are valid URLs"
     )
 
+    published_urls: List[str] = all_urls_by_status.get("publish", [])
+    archived_urls: List[str] = all_urls_by_status.get("archive", [])
+
     whitelisted_but_not_published: List[str] = get_list_difference(
-        valid_whitelisted_paths, all_urls_by_status["publish"]
+        valid_whitelisted_paths, published_urls
     )
     published_but_not_whitelisted: List[str] = get_list_difference(
-        all_urls_by_status["publish"], valid_whitelisted_paths
+        published_urls, valid_whitelisted_paths
     )
+    should_be_archived: List[str] = get_list_difference(
+        valid_expected_archived_paths, archived_urls
+    )
+
     print(f"Whitelisted, but not published: {len(whitelisted_but_not_published)}")
     print(f"Published, but not whitelisted: {len(published_but_not_whitelisted)}")
-    with open(OUTPUT_WHITELISTED_NOT_PUBLISHED, "w", encoding="utf-8") as f:
-        for url in whitelisted_but_not_published:
-            f.write(f"{url}\n")
-    with open(OUTPUT_PUBLISHED_NOT_WHITELISTED, "w", encoding="utf-8") as f:
-        for url in published_but_not_whitelisted:
-            f.write(f"{url}\n")
-
-    should_be_archived: List[str] = get_list_difference(
-        valid_expected_archived_paths, all_urls_by_status["archive"]
-    )
-    extra_archived: List[str] = get_list_difference(
-        all_urls_by_status["archive"], valid_expected_archived_paths
-    )
     print(f"Not archived, but should be archived: {len(should_be_archived)}")
-    print(f"Archived, but weren't on our expected list: {len(extra_archived)}")
-    with open(OUTPUT_SHOULD_BE_ARCHIVED, "w", encoding="utf-8") as f:
-        for url in should_be_archived:
-            f.write(f"{url}\n")
-    with open(OUTPUT_EXTRA_ARCHIVED, "w", encoding="utf-8") as f:
-        for url in extra_archived:
-            f.write(f"{url}\n")
+    print(f"Invalid whitelist paths: {len(invalid_whitelisted_paths)}")
+    print(f"Invalid archive-input paths: {len(invalid_expected_archived_paths)}")
 
-    # Run checks ##############################################################
+    write_markdown_report(
+        output_path=OUTPUT_MARKDOWN_REPORT,
+        whitelisted_but_not_published=whitelisted_but_not_published,
+        published_but_not_whitelisted=published_but_not_whitelisted,
+        should_be_archived=should_be_archived,
+        invalid_whitelisted_paths=invalid_whitelisted_paths,
+        invalid_expected_archived_paths=invalid_expected_archived_paths,
+    )
+
+    # Run checks
     if RUN_CHECKS:
         print(
             f"Checking {len(list_whitelisted_paths)} whitelisted e3sm.org pages for search phrases"
@@ -129,6 +112,7 @@ def main():
         with open(INPUT_SEARCH_PHRASES, "r", encoding="utf-8") as f:
             terms: List[str] = [line.rstrip("\n").lower() for line in f]
             list_search_phrases: List[str] = sorted(terms)
+
         links = LinkedURLs(
             list_whitelisted_paths,
             scan_links_for_sensitive_terms=True,
@@ -145,15 +129,71 @@ def main():
         with open(
             OUTPUT_INCORRECTLY_ACCESSIBLE_E3SM_ORG_PATHS, "w", encoding="utf-8"
         ) as f:
-            for e3sm_url in list_expected_archived_paths:
+            for e3sm_url in non_published_urls:
                 e3sm_url_status = get_e3sm_url_status(e3sm_url)
                 if e3sm_url_status == "link works not logged-in":
-                    # This URL works, when it should not.
                     f.write(f"{e3sm_url}\n")
-                pass
 
 
-def get_wordpress_urls_by_status(xml_file_path: str, post_type: str):
+def write_markdown_report(
+    output_path: str,
+    whitelisted_but_not_published: List[str],
+    published_but_not_whitelisted: List[str],
+    should_be_archived: List[str],
+    invalid_whitelisted_paths: List[str],
+    invalid_expected_archived_paths: List[str],
+) -> None:
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("# Valid Paths\n\n")
+        write_markdown_section(
+            f,
+            "Whitelisted but not published",
+            whitelisted_but_not_published,
+        )
+        write_markdown_section(
+            f,
+            "Published but not whitelisted",
+            published_but_not_whitelisted,
+        )
+        write_markdown_section(
+            f,
+            "Expecting to be archived, but not yet archived",
+            should_be_archived,
+        )
+
+        f.write("# Invalid Paths\n\n")
+        write_markdown_section(
+            f,
+            "Identified in whitelist input",
+            invalid_whitelisted_paths,
+        )
+        write_markdown_section(
+            f,
+            "Identified in archive input",
+            invalid_expected_archived_paths,
+        )
+
+
+def write_markdown_section(file_obj, title: str, items: List[str]) -> None:
+    file_obj.write(f"## {title}\n\n")
+    if not items:
+        file_obj.write("_None._\n\n")
+        return
+
+    for i, item in enumerate(items, start=1):
+        file_obj.write(f"{i}. {item}\n")
+    file_obj.write("\n")
+
+
+def print_status_counts(all_urls_by_status: Dict[str, List[str]]) -> None:
+    for status in ["publish", "archive", "draft", "future", "pending", "private"]:
+        if status in all_urls_by_status:
+            print(f"Found {len(all_urls_by_status[status])} {status} URLs")
+
+
+def get_wordpress_urls_by_status(
+    xml_file_path: str, post_type: str
+) -> Dict[str, List[str]]:
     ns = {
         "wp": "http://wordpress.org/export/1.2/",
     }
@@ -161,7 +201,7 @@ def get_wordpress_urls_by_status(xml_file_path: str, post_type: str):
     tree = ET.parse(xml_file_path)
     root = tree.getroot()
 
-    grouped = defaultdict(list)
+    grouped: Dict[str, List[str]] = defaultdict(list)
     channel = root.find("channel")
     if channel is None:
         return {}
@@ -187,37 +227,33 @@ def get_wordpress_urls_by_status(xml_file_path: str, post_type: str):
 
 
 def get_total_count(urls_by_status: Dict[str, List[str]]) -> int:
-    count: int = 0
-    for status in urls_by_status:
-        count += len(urls_by_status[status])
-    return count
+    return sum(len(urls) for urls in urls_by_status.values())
 
 
 def get_combined_urls_by_status(
     pages_by_status: Dict[str, List[str]], posts_by_status: Dict[str, List[str]]
 ) -> Dict[str, List[str]]:
-    merged = defaultdict(list)
+    merged: Dict[str, List[str]] = defaultdict(list)
     for source in (pages_by_status, posts_by_status):
         for status, urls in source.items():
             merged[status].extend(urls)
-    return dict(merged)
+    return {status: sorted(urls) for status, urls in merged.items()}
 
 
 def get_list_difference(list1: List[str], list2: List[str]) -> List[str]:
-    diff: List[str] = list(set(list1) - set(list2))
-    return sorted(diff)
+    return sorted(set(list1) - set(list2))
 
 
 def get_all_urls(urls_by_status: Dict[str, List[str]]) -> List[str]:
-    non_published_urls: List[str] = []
-    for status in urls_by_status:
-        non_published_urls += urls_by_status[status]
-    return non_published_urls
+    all_urls: List[str] = []
+    for urls in urls_by_status.values():
+        all_urls.extend(urls)
+    return sorted(all_urls)
 
 
 def get_all_non_published_urls(urls_by_status: Dict[str, List[str]]) -> List[str]:
     non_published_urls: List[str] = []
-    for status in urls_by_status:
+    for status, urls in urls_by_status.items():
         if status != "publish":
-            non_published_urls += urls_by_status[status]
-    return non_published_urls
+            non_published_urls.extend(urls)
+    return sorted(non_published_urls)
