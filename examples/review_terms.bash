@@ -17,3 +17,7 @@ echo "Step 2. Review e3sm.org"
 cp ${IO_DIR}/output/website_reviewer/hierarchical_outline.txt ${IO_DIR}/input/e3sm_org_reviewer/hierarchical_outline.txt
 cp ${IO_DIR}/output/website_reviewer/sensitive_terms.txt ${IO_DIR}/input/e3sm_org_reviewer/confluence_sensitive_terms.txt
 e3sm-comms-e3sm-org-reviewer
+echo "Output reports:"
+echo "1. ${IO_DIR}/output/e3sm_org_reviewer/path_report.md"
+echo "2. ${IO_DIR}/output/e3sm_org_reviewer/sensitive_terms.md"
+echo "3. ${IO_DIR}/output/e3sm_org_reviewer/action_items.md

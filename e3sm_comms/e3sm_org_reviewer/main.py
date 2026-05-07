@@ -12,19 +12,24 @@ from e3sm_comms.page_reviewer.utils_base import (
 )
 from e3sm_comms.utils import IO_DIR
 
+# From WordPress under Tools > Export:
 INPUT_XML_PAGES: str = f"{IO_DIR}/input/e3sm_org_reviewer/wordpress_pages.xml"
 INPUT_XML_POSTS: str = f"{IO_DIR}/input/e3sm_org_reviewer/wordpress_posts.xml"
-INPUT_WHITELIST: str = f"{IO_DIR}/input/e3sm_org_reviewer/whitelisted_web_pages.txt"
-INPUT_EXPECTED_ARCHIVED_E3SM_ORG_PATHS: str = (
-    f"{IO_DIR}/input/shared/archived_web_pages.txt"
-)
-INPUT_SEARCH_PHRASES: str = f"{IO_DIR}/input/shared/sensitive_terms.txt"
+
+# From output of `e3sm-comms-website-reviewer`:
 INPUT_CONFLUENCE_HIERARCHY: str = (
     f"{IO_DIR}/input/e3sm_org_reviewer/hierarchical_outline.txt"
 )
 INPUT_CONFLUENCE_SENSITIVE_TERMS: str = (
     f"{IO_DIR}/input/e3sm_org_reviewer/confluence_sensitive_terms.txt"
 )
+
+# Other:
+INPUT_WHITELIST: str = f"{IO_DIR}/input/e3sm_org_reviewer/whitelisted_web_pages.txt"
+INPUT_EXPECTED_ARCHIVED_E3SM_ORG_PATHS: str = (
+    f"{IO_DIR}/input/shared/archived_web_pages.txt"
+)
+INPUT_SEARCH_PHRASES: str = f"{IO_DIR}/input/shared/sensitive_terms.txt"
 INPUT_KNOWN_OK_E3SM_ORG_PATHS: str = (
     f"{IO_DIR}/input/e3sm_org_reviewer/known_ok_e3sm_org_paths.txt"
 )
