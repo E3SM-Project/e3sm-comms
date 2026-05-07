@@ -1,6 +1,6 @@
 import xml.etree.ElementTree as ET
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict, List, TextIO
 
 from e3sm_comms.page_reviewer.utils_base import LinkedURLs, get_e3sm_url_status
 from e3sm_comms.utils import IO_DIR
@@ -97,6 +97,9 @@ def main():
 
     write_markdown_report(
         output_path=OUTPUT_MARKDOWN_REPORT,
+        all_urls_by_status=all_urls_by_status,
+        valid_whitelisted_paths=valid_whitelisted_paths,
+        valid_expected_archived_paths=valid_expected_archived_paths,
         whitelisted_but_not_published=whitelisted_but_not_published,
         published_but_not_whitelisted=published_but_not_whitelisted,
         should_be_archived=should_be_archived,
@@ -137,6 +140,9 @@ def main():
 
 def write_markdown_report(
     output_path: str,
+    all_urls_by_status: Dict[str, List[str]],
+    valid_whitelisted_paths: List[str],
+    valid_expected_archived_paths: List[str],
     whitelisted_but_not_published: List[str],
     published_but_not_whitelisted: List[str],
     should_be_archived: List[str],
@@ -144,6 +150,13 @@ def write_markdown_report(
     invalid_expected_archived_paths: List[str],
 ) -> None:
     with open(output_path, "w", encoding="utf-8") as f:
+        write_summary_table(
+            f,
+            all_urls_by_status=all_urls_by_status,
+            valid_whitelisted_paths=valid_whitelisted_paths,
+            valid_expected_archived_paths=valid_expected_archived_paths,
+        )
+
         f.write("# Valid Paths\n\n")
         write_markdown_section(
             f,
@@ -174,7 +187,58 @@ def write_markdown_report(
         )
 
 
-def write_markdown_section(file_obj, title: str, items: List[str]) -> None:
+def write_summary_table(
+    file_obj: TextIO,
+    all_urls_by_status: Dict[str, List[str]],
+    valid_whitelisted_paths: List[str],
+    valid_expected_archived_paths: List[str],
+) -> None:
+    statuses: List[str] = sorted(all_urls_by_status.keys())
+
+    whitelist_set = set(valid_whitelisted_paths)
+    expected_archived_set = set(valid_expected_archived_paths)
+    accounted_for_set = whitelist_set.union(expected_archived_set)
+
+    all_urls_set = set(get_all_urls(all_urls_by_status))
+    remaining_set = all_urls_set - accounted_for_set
+
+    rows = [
+        ("Whitelisted URLs", whitelist_set),
+        ("Expected archived", expected_archived_set),
+        ("All remaining", remaining_set),
+        ("TOTAL", all_urls_set),
+    ]
+
+    file_obj.write("# Summary\n\n")
+    file_obj.write("| Type | " + " | ".join(statuses) + " |\n")
+    file_obj.write("| --- | " + " | ".join("---" for _ in statuses) + " |\n")
+
+    for row_name, row_urls in rows:
+        counts = get_status_counts_for_urls(
+            urls=list(row_urls),
+            all_urls_by_status=all_urls_by_status,
+            statuses=statuses,
+        )
+        file_obj.write(
+            f"| {row_name} | "
+            + " | ".join(str(counts[status]) for status in statuses)
+            + " |\n"
+        )
+
+    file_obj.write("\n")
+
+
+def get_status_counts_for_urls(
+    urls: List[str], all_urls_by_status: Dict[str, List[str]], statuses: List[str]
+) -> Dict[str, int]:
+    url_set = set(urls)
+    counts: Dict[str, int] = {}
+    for status in statuses:
+        counts[status] = len(url_set.intersection(all_urls_by_status.get(status, [])))
+    return counts
+
+
+def write_markdown_section(file_obj: TextIO, title: str, items: List[str]) -> None:
     file_obj.write(f"## {title}\n\n")
     if not items:
         file_obj.write("_None._\n\n")
