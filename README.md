@@ -30,7 +30,7 @@ This package is for implementing the software needs of the E3SM Communications t
 - input:
   - From WordPress under Tools > Export: xml file of WordPress pages, xml file of WordPress posts
   - From output of `e3sm-comms-website-reviewer`: txt file of hierarchical outline of Confluence pages
-  - Other: txt file of sensitive terms
+  - Other: txt file of sensitive terms, txt file of whitelisted e3sm.org pages
 - output: Markdown summary report of sensitive terms found in exported WordPress data
 
 ### Confluence API commands (require Confluence token)

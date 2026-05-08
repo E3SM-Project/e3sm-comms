@@ -288,7 +288,7 @@ def build_records(
     confluence_hierarchy: str,
     sensitive_terms_file: str,
     whitelist_file: str,
-) -> List[ReportRecord]:
+) -> Tuple[List[ReportRecord], Dict[str, int]]:
     sensitive_terms_list = read_sensitive_terms(sensitive_terms_file)
     confluence_map = get_confluence_mapping(confluence_hierarchy)
 
@@ -301,20 +301,23 @@ def build_records(
     whitelisted_urls = expand_patterns_to_urls(whitelist_patterns, all_urls)
 
     records: List[ReportRecord] = []
+    status_totals: DefaultDict[str, int] = defaultdict(int)
 
     for item in raw_items:
-        plain_text = strip_html(item.body)
-        term_counts = count_sensitive_terms(plain_text, sensitive_terms_list)
-
-        if not term_counts:
-            continue
-
         normalized_status = normalize_status(item.status)
         if normalized_status == "published":
             if item.url in whitelisted_urls:
                 normalized_status = "published & whitelisted"
             else:
                 normalized_status = "published & not whitelisted"
+
+        status_totals[normalized_status] += 1
+
+        plain_text = strip_html(item.body)
+        term_counts = count_sensitive_terms(plain_text, sensitive_terms_list)
+
+        if not term_counts:
+            continue
 
         records.append(
             ReportRecord(
@@ -326,10 +329,14 @@ def build_records(
             )
         )
 
-    return records
+    return records, dict(status_totals)
 
 
-def write_markdown_report(output_path: str, records: List[ReportRecord]) -> None:
+def write_markdown_report(
+    output_path: str,
+    records: List[ReportRecord],
+    status_totals: Dict[str, int],
+) -> None:
     grouped: DefaultDict[str, List[ReportRecord]] = defaultdict(list)
     for record in records:
         grouped[record.status].append(record)
@@ -356,27 +363,39 @@ def write_markdown_report(output_path: str, records: List[ReportRecord]) -> None
     with open(output_file, "w", encoding="utf-8") as f:
         f.write("# WordPress Sensitive Terms Report\n\n")
         f.write(
-            "This report includes only e3sm.org pages/posts where one or more sensitive terms were found.\n\n"
+            "The detailed sections below include only e3sm.org pages/posts where one or more sensitive terms were found. "
+            "The summary table includes counts for both flagged and unflagged items.\n\n"
         )
 
-        f.write("| Status | Count |\n")
-        f.write("| --- | ---: |\n")
+        f.write("| Status | With sensitive terms | Without sensitive terms | Total |\n")
+        f.write("| --- | ---: | ---: | ---: |\n")
 
-        total_count = 0
+        total_with_terms = 0
+        total_without_terms = 0
 
-        for status in ordered_statuses:
-            if status in grouped:
-                count = len(grouped[status])
-                total_count += count
-                f.write(f"| {status} | {count} |\n")
+        all_summary_statuses = set(status_totals) | set(grouped)
+        extra_statuses = sorted(
+            s for s in all_summary_statuses if s not in ordered_statuses
+        )
 
-        extra_statuses = sorted(s for s in grouped if s not in ordered_statuses)
-        for status in extra_statuses:
-            count = len(grouped[status])
-            total_count += count
-            f.write(f"| {status} | {count} |\n")
+        for status in ordered_statuses + extra_statuses:
+            total_in_status = status_totals.get(status, 0)
+            with_terms = len(grouped.get(status, []))
+            without_terms = total_in_status - with_terms
 
-        f.write(f"| TOTAL | {total_count} |\n")
+            if total_in_status == 0 and with_terms == 0:
+                continue
+
+            total_with_terms += with_terms
+            total_without_terms += without_terms
+            f.write(
+                f"| {status} | {with_terms} | {without_terms} | {total_in_status} |\n"
+            )
+
+        grand_total = total_with_terms + total_without_terms
+        f.write(
+            f"| TOTAL | {total_with_terms} | {total_without_terms} | {grand_total} |\n"
+        )
         f.write("\n")
 
         all_statuses = ordered_statuses + extra_statuses
@@ -405,7 +424,7 @@ def write_markdown_report(output_path: str, records: List[ReportRecord]) -> None
 
 
 def main() -> None:
-    records = build_records(
+    records, status_totals = build_records(
         xml_pages=INPUT_XML_PAGES,
         xml_posts=INPUT_XML_POSTS,
         confluence_hierarchy=INPUT_CONFLUENCE_HIERARCHY,
@@ -413,7 +432,7 @@ def main() -> None:
         whitelist_file=INPUT_WHITELIST,
     )
 
-    write_markdown_report(OUTPUT_MARKDOWN_REPORT, records)
+    write_markdown_report(OUTPUT_MARKDOWN_REPORT, records, status_totals)
     print(f"Wrote report to {OUTPUT_MARKDOWN_REPORT}")
 
 
