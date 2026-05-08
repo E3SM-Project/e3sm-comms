@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import DefaultDict, Dict, List, Optional, Tuple
+from typing import DefaultDict, Dict, List, Optional, Set, Tuple
 
 from e3sm_comms.page_reviewer.utils_base import map_confluence_to_e3sm
 from e3sm_comms.utils import IO_DIR
@@ -20,6 +20,7 @@ INPUT_CONFLUENCE_HIERARCHY: str = (
     f"{IO_DIR}/input/exported_xml_reviewer/hierarchical_outline.txt"
 )
 INPUT_SEARCH_PHRASES: str = f"{IO_DIR}/input/shared/sensitive_terms.txt"
+INPUT_WHITELIST: str = f"{IO_DIR}/input/exported_xml_reviewer/whitelisted_web_pages.txt"
 
 OUTPUT_MARKDOWN_REPORT: str = (
     f"{IO_DIR}/output/exported_xml_reviewer/wordpress_sensitive_terms_report.md"
@@ -78,6 +79,11 @@ def read_sensitive_terms(file_path: str) -> List[str]:
     return sorted(set(terms))
 
 
+def read_whitelist_patterns(file_path: str) -> List[str]:
+    with open(file_path, "r", encoding="utf-8") as f:
+        return [line.strip() for line in f if line.strip()]
+
+
 def count_sensitive_terms(text: str, terms: List[str]) -> Dict[str, int]:
     counts: Dict[str, int] = {}
     lowered = text.lower()
@@ -90,6 +96,41 @@ def count_sensitive_terms(text: str, terms: List[str]) -> Dict[str, int]:
             counts[term] = len(matches)
 
     return counts
+
+
+def matches_pattern(pattern: str, url: str) -> bool:
+    if "*" not in pattern:
+        return pattern == url
+
+    if pattern.count("*") == 1 and pattern.endswith("*"):
+        prefix = pattern[:-1]
+        return url.startswith(prefix)
+
+    parts = pattern.split("*")
+    position = 0
+    for i, part in enumerate(parts):
+        if not part:
+            continue
+        found_at = url.find(part, position)
+        if found_at == -1:
+            return False
+        if i == 0 and not pattern.startswith("*") and found_at != 0:
+            return False
+        position = found_at + len(part)
+
+    if not pattern.endswith("*") and parts[-1] and not url.endswith(parts[-1]):
+        return False
+
+    return True
+
+
+def expand_patterns_to_urls(patterns: List[str], all_urls: List[str]) -> Set[str]:
+    matched_urls: Set[str] = set()
+    for pattern in patterns:
+        for url in all_urls:
+            if matches_pattern(pattern, url):
+                matched_urls.add(url)
+    return matched_urls
 
 
 def parse_confluence_hierarchy_file(input_file: str) -> List[Tuple[str, str]]:
@@ -246,6 +287,7 @@ def build_records(
     xml_posts: str,
     confluence_hierarchy: str,
     sensitive_terms_file: str,
+    whitelist_file: str,
 ) -> List[ReportRecord]:
     sensitive_terms_list = read_sensitive_terms(sensitive_terms_file)
     confluence_map = get_confluence_mapping(confluence_hierarchy)
@@ -253,6 +295,10 @@ def build_records(
     raw_items: List[WordpressItem] = []
     raw_items.extend(parse_wordpress_xml(xml_pages, "page"))
     raw_items.extend(parse_wordpress_xml(xml_posts, "post"))
+
+    whitelist_patterns = read_whitelist_patterns(whitelist_file)
+    all_urls = [item.url for item in raw_items if item.url]
+    whitelisted_urls = expand_patterns_to_urls(whitelist_patterns, all_urls)
 
     records: List[ReportRecord] = []
 
@@ -263,11 +309,18 @@ def build_records(
         if not term_counts:
             continue
 
+        normalized_status = normalize_status(item.status)
+        if normalized_status == "published":
+            if item.url in whitelisted_urls:
+                normalized_status = "published & whitelisted"
+            else:
+                normalized_status = "published & not whitelisted"
+
         records.append(
             ReportRecord(
                 title=item.title,
                 e3sm_url=item.url,
-                status=normalize_status(item.status),
+                status=normalized_status,
                 sensitive_terms=term_counts,
                 confluence_draft_url=confluence_map.get(item.url),
             )
@@ -287,7 +340,8 @@ def write_markdown_report(output_path: str, records: List[ReportRecord]) -> None
         )
 
     ordered_statuses = [
-        "published",
+        "published & whitelisted",
+        "published & not whitelisted",
         "archived",
         "draft",
         "future",
@@ -308,14 +362,21 @@ def write_markdown_report(output_path: str, records: List[ReportRecord]) -> None
         f.write("| Status | Count |\n")
         f.write("| --- | ---: |\n")
 
+        total_count = 0
+
         for status in ordered_statuses:
             if status in grouped:
-                f.write(f"| {status} | {len(grouped[status])} |\n")
+                count = len(grouped[status])
+                total_count += count
+                f.write(f"| {status} | {count} |\n")
 
         extra_statuses = sorted(s for s in grouped if s not in ordered_statuses)
         for status in extra_statuses:
-            f.write(f"| {status} | {len(grouped[status])} |\n")
+            count = len(grouped[status])
+            total_count += count
+            f.write(f"| {status} | {count} |\n")
 
+        f.write(f"| TOTAL | {total_count} |\n")
         f.write("\n")
 
         all_statuses = ordered_statuses + extra_statuses
@@ -331,7 +392,7 @@ def write_markdown_report(output_path: str, records: List[ReportRecord]) -> None
             for idx, record in enumerate(grouped[status], start=1):
                 e3sm_md = f"[e3sm.org]({record.e3sm_url})"
                 confluence_md = (
-                    f" [confluence draft]({record.confluence_draft_url})"
+                    f" [(confluence draft)]({record.confluence_draft_url})"
                     if record.confluence_draft_url
                     else ""
                 )
@@ -349,6 +410,7 @@ def main() -> None:
         xml_posts=INPUT_XML_POSTS,
         confluence_hierarchy=INPUT_CONFLUENCE_HIERARCHY,
         sensitive_terms_file=INPUT_SEARCH_PHRASES,
+        whitelist_file=INPUT_WHITELIST,
     )
 
     write_markdown_report(OUTPUT_MARKDOWN_REPORT, records)
