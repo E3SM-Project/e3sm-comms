@@ -19,6 +19,11 @@ from e3sm_comms.page_reviewer.utils_base import (
     map_confluence_to_e3sm,
 )
 
+# Use this dict to keep track of acronyms that we know are defined (either through link or text expansion).
+# That way, the newsletter-reviewer won't mark them as undefined.
+# This dict maps Confluence page URLs to sets of acronyms
+KNOWN_DEFINED_ACRONYMS_DICT: Dict[str, Set[str]] = {}
+
 # These functions are only called in newsletter_reviewer mode #################
 
 
@@ -231,17 +236,17 @@ def get_acronyms(text: str) -> List[str]:
     return undefined_acronyms
 
 
-def filter_acronyms(
-    page_url: str,
-    acronyms: List[str],
-    known_defined_acronyms_dict: Dict[str, Set[str]] = {},
-) -> List[str]:
+def filter_acronyms(page_url: str, acronyms: List[str]) -> List[str]:
     filtered_acronyms: List[str] = []
-    if page_url in known_defined_acronyms_dict:
-        known_defined_acronyms: Set[str] = known_defined_acronyms_dict[page_url]
-        found_acronyms: Set[str] = set(acronyms)
+    found_acronyms: Set[str] = set(acronyms)
+    if page_url in KNOWN_DEFINED_ACRONYMS_DICT:
+        # Filter out known-defined acronyms
+        known_defined_acronyms: Set[str] = KNOWN_DEFINED_ACRONYMS_DICT[page_url]
         remaining_acronyms: Set[str] = found_acronyms - known_defined_acronyms
         filtered_acronyms = sorted(list(remaining_acronyms))
+    else:
+        # We have no known-defined acronyms
+        filtered_acronyms = sorted(list(found_acronyms))
     return filtered_acronyms
 
 
