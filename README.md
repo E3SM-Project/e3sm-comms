@@ -8,7 +8,7 @@ This package is for implementing the software needs of the E3SM Communications t
 
 `e3sm-comms-e3sm-org-reviewer`
 - input:
-  - From WordPress under Tools > Export: xml file of WordPress pages, xml file of WordPress posts
+  - From WordPress under Tools > Export: xml file of WordPress pages, xml file of WordPress posts. Note: your export will go to your local machine. Example transfer command: `scp local_path/wordpress_posts.xml forsyth@perlmutter.nersc.gov:perlmutter_path/wordpress_posts.xml`.
   - From output of `e3sm-comms-website-reviewer`: txt file of hierarchical outline of Confluence pages, txt file of sensitive terms found on Confluence pages
   - Other: txt file of whitelisted e3sm.org pages, txt file of e3sm.org pages expected to be archived, txt file of sensitive terms, txt file of known-ok e3sm.org pages (that is, script is picking up errors we don't care about), txt file of keep-unchanged e3sm.org pages (that is, pages we don't want to change)
 - output: 3 Markdown summary reports: (1) An analysis of the e3sm.org paths, (2) An analysis of the sensitive terms found, (3) the key action items
