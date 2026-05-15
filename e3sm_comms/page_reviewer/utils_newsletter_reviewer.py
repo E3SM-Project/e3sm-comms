@@ -19,6 +19,92 @@ from e3sm_comms.page_reviewer.utils_base import (
     map_confluence_to_e3sm,
 )
 
+# Use this dict to keep track of acronyms that we know are defined (either through link or text expansion).
+# That way, the newsletter-reviewer won't mark them as undefined.
+# This dict maps Confluence page URLs to sets of acronyms
+KNOWN_DEFINED_ACRONYMS_DICT: Dict[str, Set[str]] = {
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6132006913/Omega+A+Next-Generation+Ocean+Model+for+Exascale+Computing": {
+        "CPU",
+        "GPU",
+        "MPAS",
+        "MPI",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6154879009/Waves+in+E3SM+a+Core+Coupled+Capability+for+Polar+Coastal+Science+Energy+Applications+and+S2S2D+Prediction": {
+        "CICE",
+        "MPAS",
+        "SSP2",
+        "WAVEWATCH",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6133088269/SCREAMv1+Paper+Recognized+as+One+of+the+10+Most-Cited+JAMES+Papers+of+2024": {
+        "CPU",
+        "GPU",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6132367363/E3SM+Makes+2026+Group+Roadmaps+Public": {
+        "BER",
+        "S2D",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/5361467407/2026+INCITE+plan+of+doing+200m+CONUS+SCREAM+runs": {
+        "GPU"
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/5586616334/Heroic+Bug+Fixes+How+zstash+Improvements+Helped+the+High-Resolution+Team+Archive+at+Scale": {
+        "NERSC"
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6131974211/Machine+Learning+Helps+Improve+Groundwater+Representation+in+Earth+System+Models": {
+        "2025MS005184",
+        "76RL01830",
+        "AC06",
+        "BY",
+        "CC",
+        "DE",
+        "DOI",
+        "ESM",
+        "KGE",
+        "NSE",
+        "SA",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6131974261/Expanding+Irrigation+Increases+Regional+Land+Water+Depletion": {
+        "ET",
+        "GRACE",
+        "LRL",
+        "WACCEM",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6132039681/Watershed-Based+Representation+Discretized+into+Topographic+Units+Better+Captures+Land+Surface+Heterogeneity": {
+        "2025MS005101",
+        "76RL01830",
+        "AC05",
+        "COMPY",
+        "DE",
+        "HUC",
+        "HUC10",
+        "NDVI",
+        "TGU",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/5536187468/Asynchronous+I+O+in+SCORPIO+Boosts+E3SM+Throughput": {
+        "CIME",
+        "HDF5",
+        "MPI",
+        "NERSC",
+        "SCORPIO",
+        "ZFP",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6131646483/E3SM-Unified+1.13.0+Brings+New+Tools+and+Analysis+Updates": {
+        "AIRS",
+        "ALCF",
+        "COSP",
+        "ELM",
+        "ESMF",
+        "GUI",
+        "HPC",
+        "ILAMB",
+        "MOAB",
+        "MPAS",
+        "OLCF",
+        "NCO",
+        "S2D",
+        "X11",
+    },
+}
+
 # These functions are only called in newsletter_reviewer mode #################
 
 
@@ -204,6 +290,7 @@ def get_acronyms(text: str) -> List[str]:
         "CAPTION",
         "E3SM",
         "TBD",
+        "V0",
         "V1",
         "V2",
         "V3",
@@ -231,17 +318,17 @@ def get_acronyms(text: str) -> List[str]:
     return undefined_acronyms
 
 
-def filter_acronyms(
-    page_url: str,
-    acronyms: List[str],
-    known_defined_acronyms_dict: Dict[str, Set[str]] = {},
-) -> List[str]:
+def filter_acronyms(page_url: str, acronyms: List[str]) -> List[str]:
     filtered_acronyms: List[str] = []
-    if page_url in known_defined_acronyms_dict:
-        known_defined_acronyms: Set[str] = known_defined_acronyms_dict[page_url]
-        found_acronyms: Set[str] = set(acronyms)
+    found_acronyms: Set[str] = set(acronyms)
+    if page_url in KNOWN_DEFINED_ACRONYMS_DICT:
+        # Filter out known-defined acronyms
+        known_defined_acronyms: Set[str] = KNOWN_DEFINED_ACRONYMS_DICT[page_url]
         remaining_acronyms: Set[str] = found_acronyms - known_defined_acronyms
         filtered_acronyms = sorted(list(remaining_acronyms))
+    else:
+        # We have no known-defined acronyms
+        filtered_acronyms = sorted(list(found_acronyms))
     return filtered_acronyms
 
 
