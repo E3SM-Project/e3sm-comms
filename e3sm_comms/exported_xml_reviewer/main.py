@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import csv
 import re
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import DefaultDict, Dict, List, Optional, Set, Tuple
+from urllib.parse import urlsplit, urlunsplit
 
 from e3sm_comms.page_reviewer.utils_base import map_confluence_to_e3sm
 from e3sm_comms.utils import IO_DIR
@@ -21,6 +23,7 @@ INPUT_CONFLUENCE_HIERARCHY: str = (
 )
 INPUT_SEARCH_PHRASES: str = f"{IO_DIR}/input/shared/sensitive_terms.txt"
 INPUT_WHITELIST: str = f"{IO_DIR}/input/exported_xml_reviewer/whitelisted_web_pages.txt"
+INPUT_REQUESTED_LINKS: str = f"{IO_DIR}/input/exported_xml_reviewer/requested_links.csv"
 
 OUTPUT_MARKDOWN_REPORT: str = (
     f"{IO_DIR}/output/exported_xml_reviewer/wordpress_sensitive_terms_report.md"
@@ -47,6 +50,29 @@ class ReportRecord:
     confluence_draft_url: Optional[str]
 
 
+@dataclass
+class RequestedLinkRecord:
+    e3sm_url: str
+    included_later: bool
+    current_status: str
+    currently_whitelisted: bool
+    requesting_urls: str
+
+
+def normalize_url(url: str) -> str:
+    url = url.strip()
+    if not url:
+        return ""
+
+    parts = urlsplit(url)
+    scheme = parts.scheme.lower()
+    netloc = parts.netloc.lower()
+    path = parts.path.rstrip("/")
+
+    normalized = urlunsplit((scheme, netloc, path, "", ""))
+    return normalized
+
+
 def build_confluence_url(page_id: str, space_key: str = CONFLUENCE_SPACE) -> str:
     return f"{CONFLUENCE_BASE}/spaces/{space_key}/pages/{page_id}"
 
@@ -64,6 +90,19 @@ def normalize_status(raw_status: Optional[str]) -> str:
         "private": "private",
     }
     return mapping.get(raw_status.strip().lower(), raw_status.strip().lower())
+
+
+def display_status(status: str) -> str:
+    mapping = {
+        "published": "Published",
+        "archived": "Archived",
+        "draft": "Draft",
+        "future": "Future",
+        "pending": "Pending",
+        "private": "Private",
+        "unknown": "Unknown",
+    }
+    return mapping.get(status, status.title())
 
 
 def strip_html(text: str) -> str:
@@ -84,6 +123,23 @@ def read_whitelist_patterns(file_path: str) -> List[str]:
         return [line.strip() for line in f if line.strip()]
 
 
+def read_requested_links(file_path: str) -> List[Tuple[str, str]]:
+    rows: List[Tuple[str, str]] = []
+
+    with open(file_path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            e3sm_url = normalize_url(row.get("e3sm.org link", ""))
+            requesting_urls = (
+                row.get("list of URLs that wants to link to it") or ""
+            ).strip()
+
+            if e3sm_url:
+                rows.append((e3sm_url, requesting_urls))
+
+    return rows
+
+
 def count_sensitive_terms(text: str, terms: List[str]) -> Dict[str, int]:
     counts: Dict[str, int] = {}
     lowered = text.lower()
@@ -100,25 +156,35 @@ def count_sensitive_terms(text: str, terms: List[str]) -> Dict[str, int]:
 
 def matches_pattern(pattern: str, url: str) -> bool:
     if "*" not in pattern:
-        return pattern == url
+        return normalize_url(pattern) == normalize_url(url)
 
-    if pattern.count("*") == 1 and pattern.endswith("*"):
-        prefix = pattern[:-1]
-        return url.startswith(prefix)
+    normalized_url = normalize_url(url)
+    normalized_pattern = normalize_url(pattern)
 
-    parts = pattern.split("*")
+    if "*" not in normalized_pattern:
+        return normalized_pattern == normalized_url
+
+    if normalized_pattern.count("*") == 1 and normalized_pattern.endswith("*"):
+        prefix = normalized_pattern[:-1]
+        return normalized_url.startswith(prefix)
+
+    parts = normalized_pattern.split("*")
     position = 0
     for i, part in enumerate(parts):
         if not part:
             continue
-        found_at = url.find(part, position)
+        found_at = normalized_url.find(part, position)
         if found_at == -1:
             return False
-        if i == 0 and not pattern.startswith("*") and found_at != 0:
+        if i == 0 and not normalized_pattern.startswith("*") and found_at != 0:
             return False
         position = found_at + len(part)
 
-    if not pattern.endswith("*") and parts[-1] and not url.endswith(parts[-1]):
+    if (
+        not normalized_pattern.endswith("*")
+        and parts[-1]
+        and not normalized_url.endswith(parts[-1])
+    ):
         return False
 
     return True
@@ -176,7 +242,7 @@ def get_confluence_mapping(input_file: str) -> Dict[str, str]:
         try:
             e3sm_url = map_confluence_to_e3sm(confluence_url, page_title=title)
             if e3sm_url:
-                mapping[e3sm_url] = confluence_url
+                mapping[normalize_url(e3sm_url)] = confluence_url
         except Exception as exc:
             print(f"Could not map {confluence_url}: {exc}")
 
@@ -259,7 +325,7 @@ def parse_wordpress_xml(
             else "Untitled"
         )
         link = (
-            link_elem.text.strip()
+            normalize_url(link_elem.text)
             if link_elem is not None and link_elem.text is not None
             else ""
         )
@@ -282,13 +348,47 @@ def parse_wordpress_xml(
     return items
 
 
+def build_requested_link_records(
+    requested_links_file: str,
+    raw_items: List[WordpressItem],
+    whitelisted_urls: Set[str],
+    flagged_urls: Set[str],
+) -> List[RequestedLinkRecord]:
+    requested_rows = read_requested_links(requested_links_file)
+    item_by_url = {item.url: item for item in raw_items if item.url}
+
+    records: List[RequestedLinkRecord] = []
+    for e3sm_url, requesting_urls in requested_rows:
+        item = item_by_url.get(e3sm_url)
+
+        if item is None:
+            current_status = "Not found"
+            currently_whitelisted = False
+        else:
+            current_status = display_status(normalize_status(item.status))
+            currently_whitelisted = e3sm_url in whitelisted_urls
+
+        records.append(
+            RequestedLinkRecord(
+                e3sm_url=e3sm_url,
+                included_later=e3sm_url in flagged_urls,
+                current_status=current_status,
+                currently_whitelisted=currently_whitelisted,
+                requesting_urls=requesting_urls,
+            )
+        )
+
+    return records
+
+
 def build_records(
     xml_pages: str,
     xml_posts: str,
     confluence_hierarchy: str,
     sensitive_terms_file: str,
     whitelist_file: str,
-) -> Tuple[List[ReportRecord], Dict[str, int]]:
+    requested_links_file: str,
+) -> Tuple[List[ReportRecord], Dict[str, int], List[RequestedLinkRecord]]:
     sensitive_terms_list = read_sensitive_terms(sensitive_terms_file)
     confluence_map = get_confluence_mapping(confluence_hierarchy)
 
@@ -304,14 +404,16 @@ def build_records(
     status_totals: DefaultDict[str, int] = defaultdict(int)
 
     for item in raw_items:
-        normalized_status = normalize_status(item.status)
-        if normalized_status == "published":
-            if item.url in whitelisted_urls:
-                normalized_status = "published & whitelisted"
-            else:
-                normalized_status = "published & not whitelisted"
+        base_status = normalize_status(item.status)
+        report_status = base_status
 
-        status_totals[normalized_status] += 1
+        if base_status == "published":
+            if item.url in whitelisted_urls:
+                report_status = "published & whitelisted"
+            else:
+                report_status = "published & not whitelisted"
+
+        status_totals[report_status] += 1
 
         plain_text = strip_html(item.body)
         term_counts = count_sensitive_terms(plain_text, sensitive_terms_list)
@@ -323,19 +425,28 @@ def build_records(
             ReportRecord(
                 title=item.title,
                 e3sm_url=item.url,
-                status=normalized_status,
+                status=report_status,
                 sensitive_terms=term_counts,
                 confluence_draft_url=confluence_map.get(item.url),
             )
         )
 
-    return records, dict(status_totals)
+    flagged_urls = {record.e3sm_url for record in records}
+    requested_link_records = build_requested_link_records(
+        requested_links_file=requested_links_file,
+        raw_items=raw_items,
+        whitelisted_urls=whitelisted_urls,
+        flagged_urls=flagged_urls,
+    )
+
+    return records, dict(status_totals), requested_link_records
 
 
 def write_markdown_report(
     output_path: str,
     records: List[ReportRecord],
     status_totals: Dict[str, int],
+    requested_link_records: List[RequestedLinkRecord],
 ) -> None:
     grouped: DefaultDict[str, List[ReportRecord]] = defaultdict(list)
     for record in records:
@@ -398,6 +509,25 @@ def write_markdown_report(
         )
         f.write("\n")
 
+        if requested_link_records:
+            f.write("## Requested Links\n\n")
+            f.write(
+                "| e3sm.org link | Included later on this page? | Current status | Currently whitelisted? | Requesting URLs |\n"
+            )
+            f.write("| --- | --- | --- | --- | --- |\n")
+
+            for requested_record in requested_link_records:
+                included_later = "Yes" if requested_record.included_later else "No"
+                currently_whitelisted = (
+                    "Yes" if requested_record.currently_whitelisted else "No"
+                )
+                f.write(
+                    f"| {requested_record.e3sm_url} | {included_later} | {requested_record.current_status} | "
+                    f"{currently_whitelisted} | {requested_record.requesting_urls} |\n"
+                )
+
+            f.write("\n")
+
         all_statuses = ordered_statuses + extra_statuses
         seen = set()
 
@@ -424,15 +554,21 @@ def write_markdown_report(
 
 
 def main() -> None:
-    records, status_totals = build_records(
+    records, status_totals, requested_link_records = build_records(
         xml_pages=INPUT_XML_PAGES,
         xml_posts=INPUT_XML_POSTS,
         confluence_hierarchy=INPUT_CONFLUENCE_HIERARCHY,
         sensitive_terms_file=INPUT_SEARCH_PHRASES,
         whitelist_file=INPUT_WHITELIST,
+        requested_links_file=INPUT_REQUESTED_LINKS,
     )
 
-    write_markdown_report(OUTPUT_MARKDOWN_REPORT, records, status_totals)
+    write_markdown_report(
+        OUTPUT_MARKDOWN_REPORT,
+        records,
+        status_totals,
+        requested_link_records,
+    )
     print(f"Wrote report to {OUTPUT_MARKDOWN_REPORT}")
 
 
