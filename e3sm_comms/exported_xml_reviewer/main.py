@@ -480,6 +480,26 @@ def build_records(
     return records, dict(status_totals), requested_link_records
 
 
+def sort_requested_link_records(
+    requested_link_records: List[RequestedLinkRecord],
+) -> List[RequestedLinkRecord]:
+    status_order = {
+        "Published": 0,
+        "Archived": 1,
+        "Not found": 3,
+    }
+
+    return sorted(
+        requested_link_records,
+        key=lambda r: (
+            0 if r.included_later else 1,
+            status_order.get(r.current_status, 2),
+            0 if r.currently_whitelisted else 1,
+            r.e3sm_url.lower(),
+        ),
+    )
+
+
 def write_markdown_report(
     output_path: str,
     records: List[ReportRecord],
@@ -548,6 +568,8 @@ def write_markdown_report(
         f.write("\n")
 
         if requested_link_records:
+            requested_link_records = sort_requested_link_records(requested_link_records)
+
             f.write("## Requested Links\n\n")
             f.write(
                 "| e3sm.org link | Included later on this page? | Current status | Currently whitelisted? | Requesting URLs |\n"
