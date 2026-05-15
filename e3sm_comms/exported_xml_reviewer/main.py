@@ -128,11 +128,49 @@ def read_requested_links(file_path: str) -> List[Tuple[str, str]]:
 
     with open(file_path, "r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
+
+        if not reader.fieldnames:
+            print(f"Requested links CSV has no headers: {file_path}")
+            return rows
+
+        normalized_to_actual = {
+            header.strip().lower(): header for header in reader.fieldnames if header
+        }
+
+        e3sm_header = normalized_to_actual.get("e3sm.org link")
+        requesting_header = normalized_to_actual.get(
+            "list of urls that wants to link to it"
+        )
+
+        if requesting_header is None:
+            for candidate in [
+                "list of urls that want to link to it",
+                "requesting urls",
+                "requesting url",
+                "list of urls",
+            ]:
+                requesting_header = normalized_to_actual.get(candidate)
+                if requesting_header:
+                    break
+
+        if e3sm_header is None:
+            print(
+                f"Requested links CSV is missing required column 'e3sm.org link'. "
+                f"Found headers: {reader.fieldnames}"
+            )
+            return rows
+
+        if requesting_header is None:
+            print(
+                "Requested links CSV could not find the requesting URLs column. "
+                f"Found headers: {reader.fieldnames}"
+            )
+
         for row in reader:
-            e3sm_url = normalize_url(row.get("e3sm.org link", ""))
+            e3sm_url = normalize_url(row.get(e3sm_header, ""))
             requesting_urls = (
-                row.get("list of URLs that wants to link to it") or ""
-            ).strip()
+                row.get(requesting_header, "").strip() if requesting_header else ""
+            )
 
             if e3sm_url:
                 rows.append((e3sm_url, requesting_urls))
@@ -517,7 +555,11 @@ def write_markdown_report(
             f.write("| --- | --- | --- | --- | --- |\n")
 
             for requested_record in requested_link_records:
-                included_later = "Yes" if requested_record.included_later else "No"
+                included_later = (
+                    "Yes"
+                    if requested_record.included_later
+                    else "No (i.e., contains no sensitive terms)"
+                )
                 currently_whitelisted = (
                     "Yes" if requested_record.currently_whitelisted else "No"
                 )
