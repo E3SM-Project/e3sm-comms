@@ -23,6 +23,9 @@ from e3sm_comms.page_reviewer.utils_base import (
 # That way, the newsletter-reviewer won't mark them as undefined.
 # This dict maps Confluence page URLs to sets of acronyms
 KNOWN_DEFINED_ACRONYMS_DICT: Dict[str, Set[str]] = {
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6131974145/From+the+PI+May+26+Looking+Forward+to+the+Summer+All-Hands": {
+        "JAMES"
+    },
     "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6132006913/Omega+A+Next-Generation+Ocean+Model+for+Exascale+Computing": {
         "CPU",
         "GPU",
@@ -43,11 +46,23 @@ KNOWN_DEFINED_ACRONYMS_DICT: Dict[str, Set[str]] = {
         "BER",
         "S2D",
     },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/5361467407/2026+INCITE+plan+of+doing+200m+CONUS+SCREAM+runs": {
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/5361467407/2026+INCITE+award+enables+unprecedented+simulations": {
         "GPU"
     },
     "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/5586616334/Heroic+Bug+Fixes+How+zstash+Improvements+Helped+the+High-Resolution+Team+Archive+at+Scale": {
         "NERSC"
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6131712020/E3SM+Data+Locations+and+Policies": {
+        "BER",
+        "BGC",
+        "DECK",
+        "ESGF",
+        "HPSS",
+        "LE",
+        "LR",
+        "PB",
+        "RESOURCES",
+        "TB",
     },
     "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6131974211/Machine+Learning+Helps+Improve+Groundwater+Representation+in+Earth+System+Models": {
         "2025MS005184",
@@ -346,9 +361,11 @@ def set_wordpress_keys(page: ConfluencePage):
 def check_wp_is_accessible(wp_url):
     try:
         response = requests.get(wp_url)
-        response.raise_for_status()  # Raises HTTPError for 4xx/5xx responses
+        print(f"  e3sm.org page status: {response.status_code}")
+        response.raise_for_status()
         return True
-    except Exception:
+    except requests.exceptions.RequestException as e:
+        print(f"  e3sm.org page request failed: {e}")
         return False
 
 
