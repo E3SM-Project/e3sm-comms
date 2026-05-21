@@ -32,6 +32,9 @@ OUTPUT_MARKDOWN_REPORT: str = (
 OUTPUT_HIERARCHICAL_OUTLINE: str = (
     f"{IO_DIR}/output/exported_xml_reviewer/wordpress_hierarchical_outline.txt"
 )
+OUTPUT_NAVIGATION_ISSUES_REPORT: str = (
+    f"{IO_DIR}/output/exported_xml_reviewer/wordpress_navigation_issues_report.md"
+)
 
 CONFLUENCE_SPACE = "EPWCD"
 CONFLUENCE_BASE = "https://e3sm.atlassian.net/wiki"
@@ -64,6 +67,23 @@ class RequestedLinkRecord:
     current_status: str
     currently_whitelisted: bool
     requesting_urls: str
+
+
+@dataclass
+class TopLevelPageIssue:
+    title: str
+    url: str
+    status: str
+
+
+@dataclass
+class ArchivedParentPublishedChildIssue:
+    parent_title: str
+    parent_url: str
+    parent_status: str
+    child_title: str
+    child_url: str
+    child_status: str
 
 
 def normalize_url(url: str) -> str:
@@ -517,6 +537,74 @@ def build_records(
     return records, dict(status_totals), requested_link_records, raw_items
 
 
+def build_navigation_issue_records(
+    items: List[WordpressItem],
+) -> Tuple[List[TopLevelPageIssue], List[ArchivedParentPublishedChildIssue]]:
+    allowed_top_level_titles = {
+        "about",
+        "news",
+        "resources",
+        "tools",
+        "policies",
+    }
+
+    pages = [item for item in items if item.post_type == "page" and item.post_id]
+    item_by_id: Dict[str, WordpressItem] = {item.post_id: item for item in pages}
+
+    top_level_issues: List[TopLevelPageIssue] = []
+    archived_parent_published_child_issues: List[ArchivedParentPublishedChildIssue] = []
+
+    for page in pages:
+        normalized_status = normalize_status(page.status)
+
+        is_top_level = (
+            not page.post_parent
+            or page.post_parent == "0"
+            or page.post_parent not in item_by_id
+        )
+
+        if is_top_level and page.title.strip().lower() not in allowed_top_level_titles:
+            top_level_issues.append(
+                TopLevelPageIssue(
+                    title=page.title,
+                    url=page.url,
+                    status=display_status(normalized_status),
+                )
+            )
+
+        if (
+            page.post_parent
+            and page.post_parent != "0"
+            and page.post_parent in item_by_id
+            and normalized_status == "published"
+        ):
+            parent = item_by_id[page.post_parent]
+            parent_status = normalize_status(parent.status)
+
+            if parent_status == "archived":
+                archived_parent_published_child_issues.append(
+                    ArchivedParentPublishedChildIssue(
+                        parent_title=parent.title,
+                        parent_url=parent.url,
+                        parent_status=display_status(parent_status),
+                        child_title=page.title,
+                        child_url=page.url,
+                        child_status=display_status(normalized_status),
+                    )
+                )
+
+    top_level_issues.sort(key=lambda x: (x.title.lower(), x.url.lower()))
+    archived_parent_published_child_issues.sort(
+        key=lambda x: (
+            x.parent_title.lower(),
+            x.child_title.lower(),
+            x.child_url.lower(),
+        )
+    )
+
+    return top_level_issues, archived_parent_published_child_issues
+
+
 def sort_requested_link_records(
     requested_link_records: List[RequestedLinkRecord],
 ) -> List[RequestedLinkRecord]:
@@ -719,6 +807,52 @@ def write_hierarchical_outline(output_path: str, items: List[WordpressItem]) -> 
         write_section(f, posts, "Posts")
 
 
+def write_navigation_issues_report(
+    output_path: str,
+    top_level_issues: List[TopLevelPageIssue],
+    archived_parent_published_child_issues: List[ArchivedParentPublishedChildIssue],
+) -> None:
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write("# WordPress Navigation Issues Report\n\n")
+
+        f.write("## 1. Top-level pages that are not expected top-level tabs\n\n")
+        f.write(
+            "Expected top-level tabs are: About, News, Resources, Tools, Policies.\n\n"
+        )
+
+        if top_level_issues:
+            f.write("| Title | Status | URL |\n")
+            f.write("| --- | --- | --- |\n")
+            for top_level_issue in top_level_issues:
+                f.write(
+                    f"| {top_level_issue.title} | {top_level_issue.status} | {top_level_issue.url} |\n"
+                )
+        else:
+            f.write("No unexpected top-level pages found.\n")
+
+        f.write("\n")
+
+        f.write("## 2. Published child pages under archived parent pages\n\n")
+
+        if archived_parent_published_child_issues:
+            f.write(
+                "| Parent title | Parent status | Parent URL | Child title | Child status | Child URL |\n"
+            )
+            f.write("| --- | --- | --- | --- | --- | --- |\n")
+            for archived_child_issue in archived_parent_published_child_issues:
+                f.write(
+                    f"| {archived_child_issue.parent_title} | {archived_child_issue.parent_status} | {archived_child_issue.parent_url} | "
+                    f"{archived_child_issue.child_title} | {archived_child_issue.child_status} | {archived_child_issue.child_url} |\n"
+                )
+        else:
+            f.write(
+                "No published child pages were found under archived parent pages.\n"
+            )
+
+
 def main() -> None:
     records, status_totals, requested_link_records, raw_items = build_records(
         xml_pages=INPUT_XML_PAGES,
@@ -742,8 +876,19 @@ def main() -> None:
         raw_items,
     )
 
+    top_level_issues, archived_parent_published_child_issues = (
+        build_navigation_issue_records(raw_items)
+    )
+
+    write_navigation_issues_report(
+        OUTPUT_NAVIGATION_ISSUES_REPORT,
+        top_level_issues,
+        archived_parent_published_child_issues,
+    )
+
     print(f"Wrote report to {OUTPUT_MARKDOWN_REPORT}")
     print(f"Wrote hierarchical outline to {OUTPUT_HIERARCHICAL_OUTLINE}")
+    print(f"Wrote navigation issues report to {OUTPUT_NAVIGATION_ISSUES_REPORT}")
 
 
 if __name__ == "__main__":
