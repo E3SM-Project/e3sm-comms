@@ -680,7 +680,8 @@ def write_hierarchical_outline(output_path: str, items: List[WordpressItem]) -> 
 
         def walk(node: WordpressItem, depth: int) -> None:
             indent = "  " * depth
-            line = f"{indent}{node.title}"
+            status_label = display_status(normalize_status(node.status))
+            line = f"{indent}{node.title} [{status_label}]"
             if node.url:
                 line += f" [{node.url}]"
             f.write(line + "\n")
