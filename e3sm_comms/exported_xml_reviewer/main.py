@@ -546,6 +546,7 @@ def build_navigation_issue_records(
         "resources",
         "tools",
         "policies",
+        "home page",
     }
 
     pages = [item for item in items if item.post_type == "page" and item.post_id]
@@ -593,7 +594,24 @@ def build_navigation_issue_records(
                     )
                 )
 
-    top_level_issues.sort(key=lambda x: (x.title.lower(), x.url.lower()))
+    status_order = {
+        "Published": 0,
+        "Draft": 1,
+        "Pending": 2,
+        "Future": 3,
+        "Private": 4,
+        "Archived": 5,
+        "Unknown": 6,
+    }
+
+    top_level_issues.sort(
+        key=lambda x: (
+            status_order.get(x.status, 99),
+            x.title.lower(),
+            x.url.lower(),
+        )
+    )
+
     archived_parent_published_child_issues.sort(
         key=lambda x: (
             x.parent_title.lower(),
@@ -820,7 +838,7 @@ def write_navigation_issues_report(
 
         f.write("## 1. Top-level pages that are not expected top-level tabs\n\n")
         f.write(
-            "Expected top-level tabs are: About, News, Resources, Tools, Policies.\n\n"
+            "Expected top-level tabs are: About, News, Resources, Tools, Policies, Home Page.\n\n"
         )
 
         if top_level_issues:
