@@ -28,6 +28,9 @@ INPUT_REQUESTED_LINKS: str = f"{IO_DIR}/input/exported_xml_reviewer/requested_li
 OUTPUT_MARKDOWN_REPORT: str = (
     f"{IO_DIR}/output/exported_xml_reviewer/wordpress_sensitive_terms_report.md"
 )
+OUTPUT_HIERARCHICAL_OUTLINE: str = (
+    f"{IO_DIR}/output/exported_xml_reviewer/wordpress_hierarchical_outline.txt"
+)
 
 CONFLUENCE_SPACE = "EPWCD"
 CONFLUENCE_BASE = "https://e3sm.atlassian.net/wiki"
@@ -35,6 +38,9 @@ CONFLUENCE_BASE = "https://e3sm.atlassian.net/wiki"
 
 @dataclass
 class WordpressItem:
+    post_id: str
+    post_parent: str
+    post_type: str
     title: str
     url: str
     status: str
@@ -356,6 +362,8 @@ def parse_wordpress_xml(
         title_elem = item.find("title")
         link_elem = item.find("link")
         status_elem = item.find("wp:status", ns)
+        post_id_elem = item.find("wp:post_id", ns)
+        post_parent_elem = item.find("wp:post_parent", ns)
 
         title = (
             title_elem.text.strip()
@@ -372,10 +380,23 @@ def parse_wordpress_xml(
             if status_elem is not None and status_elem.text is not None
             else "unknown"
         )
+        post_id = (
+            post_id_elem.text.strip()
+            if post_id_elem is not None and post_id_elem.text is not None
+            else ""
+        )
+        post_parent = (
+            post_parent_elem.text.strip()
+            if post_parent_elem is not None and post_parent_elem.text is not None
+            else "0"
+        )
         body = extract_item_body(item)
 
         items.append(
             WordpressItem(
+                post_id=post_id,
+                post_parent=post_parent,
+                post_type=post_type_text,
                 title=title,
                 url=link,
                 status=status,
@@ -426,7 +447,12 @@ def build_records(
     sensitive_terms_file: str,
     whitelist_file: str,
     requested_links_file: str,
-) -> Tuple[List[ReportRecord], Dict[str, int], List[RequestedLinkRecord]]:
+) -> Tuple[
+    List[ReportRecord],
+    Dict[str, int],
+    List[RequestedLinkRecord],
+    List[WordpressItem],
+]:
     sensitive_terms_list = read_sensitive_terms(sensitive_terms_file)
     confluence_map = get_confluence_mapping(confluence_hierarchy)
 
@@ -477,7 +503,7 @@ def build_records(
         flagged_urls=flagged_urls,
     )
 
-    return records, dict(status_totals), requested_link_records
+    return records, dict(status_totals), requested_link_records, raw_items
 
 
 def sort_requested_link_records(
@@ -617,8 +643,71 @@ def write_markdown_report(
             f.write("\n")
 
 
+def write_hierarchical_outline(output_path: str, items: List[WordpressItem]) -> None:
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    def write_section(f, section_items: List[WordpressItem], heading: str) -> None:
+        section_items = [item for item in section_items if item.post_id]
+
+        children_by_parent: DefaultDict[str, List[WordpressItem]] = defaultdict(list)
+        item_by_id: Dict[str, WordpressItem] = {}
+
+        for item in section_items:
+            item_by_id[item.post_id] = item
+
+        for item in section_items:
+            parent_id = (
+                item.post_parent if item.post_parent and item.post_parent != "0" else ""
+            )
+            children_by_parent[parent_id].append(item)
+
+        for child_list in children_by_parent.values():
+            child_list.sort(key=lambda x: x.title.lower())
+
+        roots = [
+            item
+            for item in section_items
+            if not item.post_parent
+            or item.post_parent == "0"
+            or item.post_parent not in item_by_id
+        ]
+        roots.sort(key=lambda x: x.title.lower())
+
+        f.write(f"{heading}\n")
+
+        seen: Set[str] = set()
+
+        def walk(node: WordpressItem, depth: int) -> None:
+            indent = "  " * depth
+            line = f"{indent}{node.title}"
+            if node.url:
+                line += f" [{node.url}]"
+            f.write(line + "\n")
+
+            if node.post_id in seen:
+                return
+
+            seen.add(node.post_id)
+
+            for child in children_by_parent.get(node.post_id, []):
+                walk(child, depth + 1)
+
+        for root in roots:
+            walk(root, 0)
+
+        f.write("\n")
+
+    pages = [item for item in items if item.post_type == "page"]
+    posts = [item for item in items if item.post_type == "post"]
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        write_section(f, pages, "Pages")
+        write_section(f, posts, "Posts")
+
+
 def main() -> None:
-    records, status_totals, requested_link_records = build_records(
+    records, status_totals, requested_link_records, raw_items = build_records(
         xml_pages=INPUT_XML_PAGES,
         xml_posts=INPUT_XML_POSTS,
         confluence_hierarchy=INPUT_CONFLUENCE_HIERARCHY,
@@ -633,7 +722,14 @@ def main() -> None:
         status_totals,
         requested_link_records,
     )
+
+    write_hierarchical_outline(
+        OUTPUT_HIERARCHICAL_OUTLINE,
+        raw_items,
+    )
+
     print(f"Wrote report to {OUTPUT_MARKDOWN_REPORT}")
+    print(f"Wrote hierarchical outline to {OUTPUT_HIERARCHICAL_OUTLINE}")
 
 
 if __name__ == "__main__":
