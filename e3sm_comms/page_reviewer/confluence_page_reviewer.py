@@ -1,5 +1,5 @@
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from e3sm_comms.page_reviewer.utils_base import (
     Config,
@@ -35,15 +35,21 @@ from e3sm_comms.page_reviewer.utils_website_reviewer import (
 # Main functionality ##########################################################
 def run(config: Config):
     remove_output_files(config)
+    credentials: Optional[ConfluenceCredentials] = None
     try:
         credentials = ConfluenceCredentials()
         if config.mode in ["resource", "website"]:
             for tab in config.list_input_confluence_paths:
                 walk_page_and_child_pages(config, credentials, tab)
+
         if config.mode == "newsletter":
             newsletter_page_list: List[ConfluencePage] = read_page_list(config)
             for page in newsletter_page_list:
-                extract_data_from_page(config, credentials, page)
+                try:
+                    extract_data_from_page(config, credentials, page)
+                except Exception as e:
+                    print(f"ERROR processing newsletter page {page.url}: {e}")
+
             newsletter_dict: Dict[str, str]
             if config.newsletter_test_link:
                 newsletter_dict = process_newsletter(
@@ -53,7 +59,8 @@ def run(config: Config):
                 newsletter_dict = {}
             construct_markdown_table(config, newsletter_page_list, newsletter_dict)
     finally:
-        del credentials.api_token  # Clear the API token from memory, for added security
+        if credentials is not None and hasattr(credentials, "api_token"):
+            del credentials.api_token  # Clear the API token from memory
 
 
 # Recurse through pages #######################################################
@@ -63,54 +70,82 @@ def walk_page_and_child_pages(
     page_url: str,
     current_depth: int = 0,
 ):
-    current_page = ConfluencePage(page_url, current_depth)
-    extract_data_from_page(config, credentials, current_page)
-    if config.mode == "resource":
-        process_resource(config, current_page)
-    for child_page_id in current_page.child_page_ids:
-        child_page_url = (
-            f"https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/{child_page_id}/"
-        )
-        walk_page_and_child_pages(
-            config, credentials, child_page_url, current_depth=current_depth + 1
-        )
+    indent = "  " * current_depth
+    current_page: Optional[ConfluencePage] = None
+
+    try:
+        current_page = ConfluencePage(page_url, current_depth)
+        print(f"{indent}Visiting page_id={current_page.page_id}, url={page_url}")
+
+        extract_data_from_page(config, credentials, current_page)
+
+        if config.mode == "resource":
+            process_resource(config, current_page)
+
+        for child_page_id in current_page.child_page_ids:
+            child_page_url = (
+                f"https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/{child_page_id}/"
+            )
+            walk_page_and_child_pages(
+                config, credentials, child_page_url, current_depth=current_depth + 1
+            )
+
+    except Exception as e:
+        page_id = current_page.page_id if current_page else "unknown"
+        print(f"{indent}ERROR on page_id={page_id}, url={page_url}: {e}")
+        # Continue traversal for sibling branches by not re-raising
 
 
-# Per page analysis ###############################################################
+# Per page analysis ##########################################################
 def extract_data_from_page(
     config: Config, credentials: ConfluenceCredentials, page: ConfluencePage
 ):
     extract_data_from_content_url(credentials, page)
+
     if config.mode in ["newsletter", "website"]:
         extract_data_from_content_url_body(config, credentials, page)
+
     if config.mode == "newsletter":
         extract_data_from_comments_url(credentials, page)
+
     if config.mode in ["resource", "website"]:
         extract_data_from_child_pages_url(credentials, page)
+
     if config.mode == "website":
         write_results(config, page)
 
 
-# Functions used by all modes #################################################
+# Functions used by all modes ################################################
 def extract_data_from_content_url(
     credentials: ConfluenceCredentials, page: ConfluencePage
 ):
     data = get_json(credentials, page.page_id, page.content_url)
+
     if "title" not in data:
         raise RuntimeError(
             f"Response for page_id={page.page_id} does not contain 'title'. Full response: {data}"
         )
+
     page.title = re.sub(r"[\r\n]+", "", data["title"])
     print(f"Extracting data from page_id={page.page_id}, title={page.title}")
+
     if "version" not in data or "number" not in data["version"]:
         raise RuntimeError(
             f"Response for page_id={page.page_id} does not contain 'version' or 'version > number'. Full response: {data}"
         )
-    current_version: str = data["version"]["number"]
+
+    current_version = data["version"]["number"]
     page.current_version = int(current_version)
 
+    if "history" not in data or "createdDate" not in data["history"]:
+        raise RuntimeError(
+            f"Response for page_id={page.page_id} does not contain 'history' or 'history > createdDate'. Full response: {data}"
+        )
 
-# Functions used by newsletter, website modes ###################################
+    page.created_date = data["history"]["createdDate"]
+
+
+# Functions used by newsletter, website modes ###############################
 def extract_data_from_content_url_body(
     config: Config, credentials: ConfluenceCredentials, page: ConfluencePage
 ):
@@ -120,17 +155,20 @@ def extract_data_from_content_url_body(
         page.content_url,
         params={"expand": "body.view.value"},
     )
-    # print_json(data) # For debugging
+
     raw_html = data.get("body", {}).get("view", {}).get("value", "")
     if config.mode == "newsletter":
         raw_html = skip_newsletter_metadata_in_header(raw_html)
+
     page.main_html, page.metadata_html = split_html(raw_html)
+
     if config.check_links_work:
         page.main_html.linked_urls = LinkedURLs(
             page.main_html.links,
             config.scan_links_for_sensitive_terms,
             config.list_sensitive_terms,
         )
+
     if ("sensitive_terms" in config.requested_output) or (
         "newsletter_review_table" in config.requested_output
     ):
@@ -150,9 +188,11 @@ def extract_data_from_content_url_body(
                 )
         else:
             print("  Skipping first-person review. Page URL is in the approved list.")
+
         page.main_html.double_spaces_after_periods = find_double_spaces_after_periods(
             page.main_html.paragraphs
         )
+
         lowercase_text: str = page.main_html.text.lower()
         page.main_html.img_mentions = get_image_mention_frequencies(
             lowercase_text, page.main_html.num_imgs
@@ -160,11 +200,13 @@ def extract_data_from_content_url_body(
         page.main_html.img_resolutions = get_image_resolutions(
             page.main_html.img_srcs, "https://e3sm.atlassian.net/wiki", credentials
         )
+
         acronyms = get_acronyms(
             page.main_html.text
         )  # Use original text, not lowercase_text!!
         page.main_html.acronyms = filter_acronyms(page.url, acronyms)
         set_wordpress_keys(page)
+
     if "need_to_sync_wordpress" in config.requested_output:
         if page.metadata_html:
             table = extract_confluence_table_to_dict(page.metadata_html)
@@ -173,12 +215,52 @@ def extract_data_from_content_url_body(
                 page.need_to_sync_wordpress = True
 
 
-# Functions used by resource, website modes ###################################
+# Functions used by resource, website modes #################################
 def extract_data_from_child_pages_url(
     credentials: ConfluenceCredentials, page: ConfluencePage
 ):
-    data = get_json(credentials, page.page_id, page.child_pages_url)
-    page.child_page_ids = [page["id"] for page in data.get("results", [])]
+    child_page_ids: List[str] = []
+    start = 0
+    limit = 100
+
+    while True:
+        data = get_json(
+            credentials,
+            page.page_id,
+            page.child_pages_url,
+            params={"start": str(start), "limit": str(limit)},
+        )
+
+        results = data.get("results", [])
+        child_page_ids.extend([child["id"] for child in results if "id" in child])
+
+        batch_count = len(results)
+        if batch_count == 0:
+            break
+
+        size = data.get("size")
+        returned_limit = data.get("limit", limit)
+        next_link = data.get("_links", {}).get("next")
+
+        print(
+            f"  Retrieved {batch_count} child pages for page_id={page.page_id} "
+            f"(start={start}, limit={returned_limit})"
+        )
+
+        if next_link:
+            start += batch_count
+            continue
+
+        if size is not None and batch_count < returned_limit:
+            break
+
+        if batch_count < limit:
+            break
+
+        start += batch_count
+
+    page.child_page_ids = child_page_ids
+
     count = len(page.child_page_ids)
     if count:
         print(f"  Found {count} child pages: {page.child_page_ids}")
