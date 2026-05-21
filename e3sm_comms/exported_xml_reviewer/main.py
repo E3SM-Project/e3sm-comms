@@ -24,6 +24,7 @@ INPUT_CONFLUENCE_HIERARCHY: str = (
 INPUT_SEARCH_PHRASES: str = f"{IO_DIR}/input/shared/sensitive_terms.txt"
 INPUT_WHITELIST: str = f"{IO_DIR}/input/exported_xml_reviewer/whitelisted_web_pages.txt"
 INPUT_REQUESTED_LINKS: str = f"{IO_DIR}/input/exported_xml_reviewer/requested_links.csv"
+INPUT_KNOWN_OK_LINKS: str = f"{IO_DIR}/input/exported_xml_reviewer/known_ok_links.txt"
 
 OUTPUT_MARKDOWN_REPORT: str = (
     f"{IO_DIR}/output/exported_xml_reviewer/wordpress_sensitive_terms_report.md"
@@ -127,6 +128,11 @@ def read_sensitive_terms(file_path: str) -> List[str]:
 def read_whitelist_patterns(file_path: str) -> List[str]:
     with open(file_path, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
+
+
+def read_known_ok_links(file_path: str) -> Set[str]:
+    with open(file_path, "r", encoding="utf-8") as f:
+        return {normalize_url(line.strip()) for line in f if line.strip()}
 
 
 def read_requested_links(file_path: str) -> List[Tuple[str, str]]:
@@ -447,6 +453,7 @@ def build_records(
     sensitive_terms_file: str,
     whitelist_file: str,
     requested_links_file: str,
+    known_ok_links_file: str,
 ) -> Tuple[
     List[ReportRecord],
     Dict[str, int],
@@ -455,6 +462,7 @@ def build_records(
 ]:
     sensitive_terms_list = read_sensitive_terms(sensitive_terms_file)
     confluence_map = get_confluence_mapping(confluence_hierarchy)
+    known_ok_urls = read_known_ok_links(known_ok_links_file)
 
     raw_items: List[WordpressItem] = []
     raw_items.extend(parse_wordpress_xml(xml_pages, "page"))
@@ -473,7 +481,10 @@ def build_records(
 
         if base_status == "published":
             if item.url in whitelisted_urls:
-                report_status = "published & whitelisted"
+                if item.url in known_ok_urls:
+                    report_status = "published & whitelisted, known ok"
+                else:
+                    report_status = "published & whitelisted"
             else:
                 report_status = "published & not whitelisted"
 
@@ -542,6 +553,7 @@ def write_markdown_report(
         )
 
     ordered_statuses = [
+        "published & whitelisted, known ok",
         "published & whitelisted",
         "published & not whitelisted",
         "archived",
@@ -715,6 +727,7 @@ def main() -> None:
         sensitive_terms_file=INPUT_SEARCH_PHRASES,
         whitelist_file=INPUT_WHITELIST,
         requested_links_file=INPUT_REQUESTED_LINKS,
+        known_ok_links_file=INPUT_KNOWN_OK_LINKS,
     )
 
     write_markdown_report(
