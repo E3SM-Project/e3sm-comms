@@ -173,6 +173,7 @@ class LinkedURLs(object):
                 "https://doi.org/",
                 "/wiki/spaces/",
                 "mailto:",
+                "https://us18.campaign-archive.com/?u=11f9e1f9713b9366390852682&id=e291e23c8c",
             ]
             for prefix in known_inaccessible_link_prefixes:
                 if link_url.startswith(prefix):
