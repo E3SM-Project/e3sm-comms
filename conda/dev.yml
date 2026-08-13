@@ -36,10 +36,10 @@ dependencies:
   # Run `pre-commit autoupdate` to get the latest pinned versions of 'rev' in
   # `.pre-commit.config.yaml`, then update the pinned versions here.
   # Make sure to also update qa in pyproject.toml
-  - black ==25.1.0
+  - black ==26.5.1
   - flake8 ==7.3.0
   - isort ==6.0.1
-  - mypy ==1.18.2
+  - mypy ==2.3.0
   - pre-commit ==4.3.0
   - types-PyYAML >=6.0.0
   # Developer Tools
