@@ -6,9 +6,9 @@ import re
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import quote, unquote, urlparse
 
-import requests  # type: ignore
+import requests
 from bs4 import BeautifulSoup
-from requests.auth import HTTPBasicAuth  # type: ignore
+from requests.auth import HTTPBasicAuth
 
 
 # Classes #####################################################################
