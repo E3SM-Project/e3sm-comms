@@ -7,12 +7,13 @@ authors = [
 description = "A package for E3SM Communications supporting software"
 license = {file = "LICENSE"}
 readme = "README.md"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.11,<3.15"
 classifiers = [
     # these are only for searching/browsing projects on PyPI
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
 ]
@@ -43,6 +44,7 @@ qa = [
     "isort==6.0.1",
     "mypy==1.18.2",
     "pre-commit==4.3.0",
+    "pyyaml",
     "types-PyYAML >=6.0.0",
 ]
 
@@ -92,7 +94,7 @@ exclude =  '''
 '''
 
 [tool.mypy]
-python_version = 3.13
+python_version = 3.14
 check_untyped_defs = true
 ignore_missing_imports = true
 warn_unused_ignores = true

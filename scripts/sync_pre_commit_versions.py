@@ -2,10 +2,10 @@
 """Sync pinned QA tool versions from ``.pre-commit-config.yaml``.
 
 ``.pre-commit-config.yaml`` is the source of truth for the versions of the
-quality-assurance tools (black, flake8, isort, mypy, ...).  The same versions
-are pinned in ``conda/dev.yml`` and in the ``qa`` extra of ``pyproject.toml``,
-so they have to be updated whenever ``pre-commit autoupdate`` (or the
-``pre-commit-update`` GitHub workflow) bumps a ``rev``.
+quality-assurance *hooks* (black, flake8, isort, mypy, ...) configured there.
+Those versions are pinned in ``conda/dev.yml`` and in the ``qa`` extra of
+``pyproject.toml``, and must be updated whenever ``pre-commit autoupdate``
+(or the ``pre-commit-update`` GitHub workflow) bumps a hook repo ``rev``.
 
 Run this script after updating ``.pre-commit-config.yaml``::
 
