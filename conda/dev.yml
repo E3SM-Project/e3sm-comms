@@ -34,8 +34,9 @@ dependencies:
   # Quality Assurance Tools
   # =======================
   # Run `pre-commit autoupdate` to get the latest pinned versions of 'rev' in
-  # `.pre-commit.config.yaml`, then update the pinned versions here.
-  # Make sure to also update qa in pyproject.toml
+  # `.pre-commit-config.yaml`, then run
+  # `python scripts/sync_pre_commit_versions.py` to update the pinned versions
+  # here and in the `qa` extra of pyproject.toml.
   - black ==25.1.0
   - flake8 ==7.3.0
   - isort ==6.0.1
