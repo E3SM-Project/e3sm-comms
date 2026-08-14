@@ -5,41 +5,41 @@ fail_fast: true
 # make sure these always match dev.yml and qa in pyproject.toml
 # (run `python scripts/sync_pre_commit_versions.py` to sync them)
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
     hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: check-yaml
         exclude: conda/meta.yaml
 
   # Can run individually with `pre-commit run black --all-files`
-  - repo: https://github.com/psf/black
-    rev: 25.1.0
+-   repo: https://github.com/psf/black
+    rev: 26.5.1
     hooks:
-      - id: black
+    -   id: black
 
   # Can run individually with `pre-commit run isort --all-files`
-  - repo: https://github.com/PyCQA/isort
-    rev: 6.0.1
+-   repo: https://github.com/PyCQA/isort
+    rev: 8.0.1
     hooks:
-      - id: isort
+    -   id: isort
 
   # Can run individually with `pre-commit run flake8 --all-files`
   # Need to use flake8 GitHub mirror due to CentOS git issue with GitLab
   # https://github.com/pre-commit/pre-commit/issues/1206
-  - repo: https://github.com/pycqa/flake8
+-   repo: https://github.com/pycqa/flake8
     rev: 7.3.0
     hooks:
-      - id: flake8
+    -   id: flake8
         args: ["--config=.flake8"]
         additional_dependencies: [flake8-isort==6.1.1]
 
   # Can run individually with `pre-commit run mypy --all-files`
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.18.2
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.3.0
     hooks:
-      - id: mypy
+    -   id: mypy
         args: ["--config-file=pyproject.toml"]
         additional_dependencies: [types-PyYAML]
 
