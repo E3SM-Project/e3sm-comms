@@ -4,11 +4,11 @@ from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Set
 
-import pytz  # type: ignore
-import requests  # type: ignore
+import pytz
+import requests
 from bs4 import BeautifulSoup
 from PIL import Image
-from requests.auth import HTTPBasicAuth  # type: ignore
+from requests.auth import HTTPBasicAuth
 
 from e3sm_comms.page_reviewer.utils_base import (
     Config,

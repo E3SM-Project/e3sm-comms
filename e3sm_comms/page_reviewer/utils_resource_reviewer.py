@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
-import requests  # type: ignore
+import requests
 from bs4 import BeautifulSoup
 
 from e3sm_comms.page_reviewer.utils_base import (
