@@ -123,8 +123,28 @@ def load_pams_rows(path):
         return rows
 
 
+def _build_section(title, fa, pi, staff, abstract):
+    """
+    Builds a single project section. Metadata lines are joined with a
+    trailing double-space + newline so Markdown renders them as separate
+    lines within the same paragraph (a plain "\n" gets collapsed by
+    Markdown renderers), rather than running together as one line.
+    """
+    meta_lines = [
+        f"### {title}",
+        f"**Focus Area:** {fa if fa else '_none found in abstract_'}",
+        f"**PI:** {pi if pi else '_unknown_'}",
+        f"**E3SM Staff:** {', '.join(staff) if staff else '_none found_'}",
+    ]
+    meta_block = "  \n".join(meta_lines)
+    abstract_block = abstract if abstract else "_no abstract available_"
+    return f"{meta_block}\n\n**Abstract:**\n\n{abstract_block}"
+
+
 def build_report(rows, known_titles, staff_list, focus_areas):
-    sections = []
+    with_staff_sections = []
+    without_staff_sections = []
+
     for row in rows:
         title = row["Title"]
         if not title or title.casefold() not in known_titles:
@@ -133,20 +153,22 @@ def build_report(rows, known_titles, staff_list, focus_areas):
         pi = row["PI"]
         fa = find_focus_area(abstract, focus_areas)
         staff = find_staff(abstract, staff_list)
-        sections.append(
-            "\n".join(
-                [
-                    f"### {title}",
-                    f"**Focus Area:** {fa if fa else '_none found_'}",
-                    f"**PI:** {pi if pi else '_unknown_'}",
-                    f"**E3SM Staff:** {', '.join(staff) if staff else '_none found_'}",
-                    "**Abstract:**",
-                    "",
-                    abstract if abstract else "_no abstract available_",
-                ]
-            )
-        )
-    return "\n\n".join(sections) if sections else "_No related projects found._\n"
+        section = _build_section(title, fa, pi, staff, abstract)
+        if staff:
+            with_staff_sections.append(section)
+        else:
+            without_staff_sections.append(section)
+
+    if not with_staff_sections and not without_staff_sections:
+        return "_No related projects found._\n"
+
+    groups = []
+    if with_staff_sections:
+        groups.append("## Has E3SM staff\n\n" + "\n\n".join(with_staff_sections))
+    if without_staff_sections:
+        groups.append("## No E3SM staff\n\n" + "\n\n".join(without_staff_sections))
+
+    return "\n\n".join(groups)
 
 
 def main():
