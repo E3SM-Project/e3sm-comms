@@ -28,17 +28,20 @@ INPUT_MALFORMED_ABSTRACTS = (
     f"{IO_DIR}/input/related_project_reviewer/malformed_abstracts.txt"
 )
 
+
 # CSV of E3SM-related awards tracked on Confluence, with keys:
-#   PI Last Name,PI First Name,Title,Genesis Mission Focus Area,Has E3SM connection
+#   PI Last Name,PI First Name,Title,Genesis Mission Focus Area,Known E3SM Staff
 # Each row is a known-relevant award. "Title" and PI name are used to
 # match against the PAMS export (title first, PI as a fallback when no
 # title match is found). "Genesis Mission Focus Area" is the focus area
 # code (e.g. "15-C") as recorded on Confluence, which is reported
 # alongside any focus area code found in the PAMS abstract text.
-# "Has E3SM connection" ("Yes"/"No") is used ONLY to build the
-# connection-based staff split reported in the Counts section — it does
-# not affect matching against PAMS or which report section a project
-# lands in.
+# "Known E3SM Staff" is either "No" or a semi-colon-separated list of
+# E3SM staff names known (via Confluence) to be involved with the
+# project. This is reported alongside (and merged with) any staff names
+# found by scanning the PAMS abstract/PI text, and is used to determine
+# which report section a project lands in — it does not affect matching
+# against PAMS.
 INPUT_KNOWN_RELEVANT_AWARDS = (
     f"{IO_DIR}/input/related_project_reviewer/e3sm_related_awards.csv"
 )
@@ -141,6 +144,45 @@ def combine_focus_area_display(abstract_code, confluence_code, focus_areas):
             f"{_format_focus_area(confluence_code, focus_areas)} (noted on Confluence)"
         )
     return ", ".join(parts)
+
+
+def combine_staff_display(abstract_staff, confluence_staff):
+    """
+    Merges E3SM staff found by scanning the PAMS abstract/PI text with
+    E3SM staff noted on Confluence (the known_relevant_awards CSV's
+    "Known E3SM Staff" column) into a single ordered list of
+    "Name (source)" display strings, e.g.:
+        ["NameA (found in abstract and noted on Confluence)",
+         "nameB (found in abstract)",
+         "NameC (noted on Confluence)"]
+
+    Names are matched between the two lists case-insensitively (so minor
+    casing differences between the abstract text and the Confluence CSV
+    don't produce duplicate entries). Abstract-found names are listed
+    first (in the order they were found), followed by any
+    Confluence-only names. When a name appears in both lists, the
+    abstract's casing/spelling is used for display.
+    """
+    confluence_casefold = {n.casefold() for n in confluence_staff}
+
+    entries = []
+    seen = set()
+    for name in abstract_staff:
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        if key in confluence_casefold:
+            entries.append(f"{name} (found in abstract and noted on Confluence)")
+        else:
+            entries.append(f"{name} (found in abstract)")
+    for name in confluence_staff:
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        entries.append(f"{name} (noted on Confluence)")
+    return entries
 
 
 def _reorder_pi_name(pi):
@@ -251,18 +293,30 @@ def _get_known_award_pi(row):
     return _normalize(_get_field(row, "Principal Investigator", "PI", "PI Name"))
 
 
+def _parse_confluence_staff(value):
+    """
+    Parses the "Known E3SM Staff" column: either "No" (or blank), meaning
+    no staff are known via Confluence, or a semi-colon-separated list of
+    staff names. Returns a list of normalized names (empty if none).
+    """
+    value = _normalize(value)
+    if not value or value.casefold() == "no":
+        return []
+    return [_normalize(name) for name in value.split(";") if _normalize(name)]
+
+
 def load_known_awards(path):
     """
     Loads e3sm_related_awards.csv (keys: PI Last Name, PI First Name,
-    Title, Genesis Mission Focus Area, Has E3SM connection) into a list
-    of records, each a dict with keys "pi", "title", "focus_area",
-    "connection". Rows with neither a title nor a PI are skipped.
+    Title, Genesis Mission Focus Area, Known E3SM Staff) into a list of
+    records, each a dict with keys "pi", "title", "focus_area",
+    "confluence_staff". Rows with neither a title nor a PI are skipped.
 
-    "connection" is the raw casefolded value of "Has E3SM connection"
-    (e.g. "yes", "no", or "" if blank/absent). It is used ONLY to build
-    the connection-based staff split in the Counts section — it plays no
-    role in matching against PAMS or in which report section a matched
-    project is rendered under.
+    "confluence_staff" is a list of E3SM staff names noted on Confluence
+    for this project (empty if the column says "No" or is blank). It is
+    merged with staff found by scanning the PAMS abstract/PI text (see
+    combine_staff_display) and used to decide which report section a
+    matched project lands in — it plays no role in matching against PAMS.
     """
     with open(path, encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
@@ -273,9 +327,9 @@ def load_known_awards(path):
             focus_area = _normalize(
                 _get_field(row, "Genesis Mission Focus Area", "Focus Area")
             )
-            connection = _normalize(
-                _get_field(row, "Has E3SM connection", "E3SM Connection")
-            ).casefold()
+            confluence_staff = _parse_confluence_staff(
+                _get_field(row, "Known E3SM Staff", "E3SM Staff")
+            )
             if not title and not pi:
                 continue
             records.append(
@@ -283,7 +337,7 @@ def load_known_awards(path):
                     "pi": pi,
                     "title": title,
                     "focus_area": focus_area or None,
-                    "connection": connection,
+                    "confluence_staff": confluence_staff,
                 }
             )
         return records
@@ -328,74 +382,68 @@ def _match_known_award(row, title_to_record, pi_variant_to_records):
     return None
 
 
-def _build_section(title, fa_display, pi, staff, abstract):
+def _build_section(title, fa_display, pi, staff_display, abstract):
     """
     Builds a single project section. Metadata lines are joined with a
     trailing double-space + newline so Markdown renders them as separate
     lines within the same paragraph (a plain "\n" gets collapsed by
     Markdown renderers), rather than running together as one line.
+
+    `staff_display` is a list of already-formatted "Name (source)"
+    strings (see combine_staff_display), not raw names.
     """
     meta_lines = [
         f"### {title}",
         f"**Focus Area:** {fa_display if fa_display else '_none found_'}",
         f"**PI:** {pi if pi else '_unknown_'}",
-        f"**E3SM Staff:** {', '.join(staff) if staff else '_none found_'}",
+        f"**E3SM Staff:** {', '.join(staff_display) if staff_display else '_none found_'}",
     ]
     meta_block = "  \n".join(meta_lines)
     abstract_block = abstract if abstract else "_no abstract available_"
     return f"{meta_block}\n\n**Abstract:**\n\n{abstract_block}"
 
 
-def _build_missing_section(missing_records):
-    if not missing_records:
+def _wrap_h2(heading, sections):
+    """Renders an h2 sub-section with a count-bearing header, or None if empty."""
+    if not sections:
         return None
-    bullets = []
-    for r in missing_records:
-        if r["title"]:
-            label = r["title"]
-        elif r["pi"]:
-            label = f"(no title; PI: {r['pi']})"
-        else:
-            label = "(no title or PI)"
-        bullets.append(f"- {label}")
-    return f"## Not found in PAMS export ({len(missing_records)})\n\n" + "\n".join(
-        bullets
-    )
+    return f"## {heading} ({len(sections)})\n\n" + "\n\n".join(sections)
 
 
 def build_report(rows, known_awards, staff_list, focus_areas, malformed_titles=None):
     """
-    Matches PAMS rows against known_relevant_awards and buckets each
-    match into one of three mutually-exclusive groups: malformed (title
-    is in malformed_titles), has-staff, or no-staff. Returns the
-    rendered report body along with a `stats` dict:
-        {
-            "matched": <int, total PAMS rows matched to a known award>,
-            "with_staff": <int>,
-            "without_staff": <int>,
-            "malformed": <int>,
-            "not_in_pams": <int, known awards with no matching PAMS row>,
-            "connection_yes_with_staff_titles": <list[str]>,
-            "connection_yes_without_staff_titles": <list[str]>,
-        }
-    `stats` is the single source of truth for counts elsewhere in the
-    report (e.g. the Counts section), so it never has to be recomputed
-    independently and risk disagreeing with the body of the report.
+    Matches PAMS rows against known_relevant_awards. For each matched
+    ("Found in PAMS") project, buckets it into one of four mutually
+    exclusive h2 groups, checked in this order:
+      1. "Malformed Abstracts" — title is in malformed_titles
+      2. "Has E3SM staff according to the abstract" — staff found by
+         scanning the abstract/PI text (regardless of whether any of
+         those staff are also noted on Confluence)
+      3. "Has E3SM staff but only noted on Confluence" — no staff found
+         in the abstract/PI text, but the known_relevant_awards CSV
+         lists staff for this project
+      4. "No E3SM staff" — neither of the above
 
-    The two "connection_yes_*_titles" lists are derived solely for the
-    Counts section's connection-based split (see load_known_awards) and
-    do NOT affect which section (with_staff/without_staff/malformed) a
-    project is rendered under in the report body.
+    known_relevant_awards records with no matching PAMS row ("Not found
+    in PAMS") are similarly bucketed, using only the Confluence-noted
+    staff (there's no abstract to scan, so "found in abstract" and
+    "Malformed Abstracts" can't apply):
+      - "Has E3SM staff but only noted on Confluence"
+      - "No E3SM staff"
+
+    Returns the rendered report body along with a `stats` dict that is
+    the single source of truth for counts elsewhere in the report (e.g.
+    the Counts section), so it never has to be recomputed independently
+    and risk disagreeing with the body of the report.
     """
     malformed_titles = malformed_titles or set()
     title_to_record, pi_variant_to_records = index_known_awards(known_awards)
 
-    with_staff_sections = []
-    without_staff_sections = []
-    malformed_sections = []
+    found_abstract_staff_sections = []
+    found_confluence_only_sections = []
+    found_no_staff_sections = []
+    found_malformed_sections = []
     matched_ids = set()
-    connection_yes_with_staff_titles = []
-    connection_yes_without_staff_titles = []
 
     for row in rows:
         record = _match_known_award(row, title_to_record, pi_variant_to_records)
@@ -411,109 +459,115 @@ def build_report(rows, known_awards, staff_list, focus_areas, malformed_titles=N
         fa_display = combine_focus_area_display(
             abstract_code, record["focus_area"], focus_areas
         )
-        staff = find_staff(abstract, pi, staff_list)
-        section = _build_section(title, fa_display, pi, staff, abstract)
 
-        if record.get("connection") == "yes":
-            label = title or "(untitled project)"
-            if staff:
-                connection_yes_with_staff_titles.append(label)
-            else:
-                connection_yes_without_staff_titles.append(label)
+        abstract_staff = find_staff(abstract, pi, staff_list)
+        confluence_staff = record["confluence_staff"]
+        staff_display = combine_staff_display(abstract_staff, confluence_staff)
+
+        section = _build_section(title, fa_display, pi, staff_display, abstract)
 
         if title and title.casefold() in malformed_titles:
-            malformed_sections.append(section)
-        elif staff:
-            with_staff_sections.append(section)
+            found_malformed_sections.append(section)
+        elif abstract_staff:
+            found_abstract_staff_sections.append(section)
+        elif confluence_staff:
+            found_confluence_only_sections.append(section)
         else:
-            without_staff_sections.append(section)
+            found_no_staff_sections.append(section)
 
     missing_records = [r for r in known_awards if id(r) not in matched_ids]
 
+    notfound_confluence_sections = []
+    notfound_no_staff_sections = []
+    for record in missing_records:
+        title = record["title"] or "(untitled project)"
+        pi = record["pi"]
+        fa_display = combine_focus_area_display(None, record["focus_area"], focus_areas)
+        confluence_staff = record["confluence_staff"]
+        staff_display = combine_staff_display([], confluence_staff)
+        section = _build_section(
+            title, fa_display, pi, staff_display, "_project not found in PAMS export_"
+        )
+        if confluence_staff:
+            notfound_confluence_sections.append(section)
+        else:
+            notfound_no_staff_sections.append(section)
+
     stats = {
-        "matched": len(matched_ids),
-        "with_staff": len(with_staff_sections),
-        "without_staff": len(without_staff_sections),
-        "malformed": len(malformed_sections),
-        "not_in_pams": len(missing_records),
-        "connection_yes_with_staff_titles": connection_yes_with_staff_titles,
-        "connection_yes_without_staff_titles": connection_yes_without_staff_titles,
+        "found_in_pams": len(matched_ids),
+        "not_found_in_pams": len(missing_records),
+        "found_abstract_staff": len(found_abstract_staff_sections),
+        "found_confluence_only_staff": len(found_confluence_only_sections),
+        "found_no_staff": len(found_no_staff_sections),
+        "found_malformed": len(found_malformed_sections),
+        "notfound_confluence_staff": len(notfound_confluence_sections),
+        "notfound_no_staff": len(notfound_no_staff_sections),
     }
 
-    if (
-        not with_staff_sections
-        and not without_staff_sections
-        and not malformed_sections
-        and not missing_records
-    ):
+    top_groups = []
+
+    found_h2s = [
+        _wrap_h2(
+            "Has E3SM staff according to the abstract", found_abstract_staff_sections
+        ),
+        _wrap_h2(
+            "Has E3SM staff but only noted on Confluence",
+            found_confluence_only_sections,
+        ),
+        _wrap_h2("No E3SM staff", found_no_staff_sections),
+        _wrap_h2("Malformed Abstracts", found_malformed_sections),
+    ]
+    found_h2s = [h2 for h2 in found_h2s if h2]
+    if found_h2s:
+        top_groups.append(
+            f"# Found in PAMS ({stats['found_in_pams']})\n\n" + "\n\n".join(found_h2s)
+        )
+
+    notfound_h2s = [
+        _wrap_h2(
+            "Has E3SM staff but only noted on Confluence", notfound_confluence_sections
+        ),
+        _wrap_h2("No E3SM staff", notfound_no_staff_sections),
+    ]
+    notfound_h2s = [h2 for h2 in notfound_h2s if h2]
+    if notfound_h2s:
+        top_groups.append(
+            f"# Not found in PAMS ({stats['not_found_in_pams']})\n\n"
+            + "\n\n".join(notfound_h2s)
+        )
+
+    if not top_groups:
         return "_No related projects found._\n", stats
 
-    groups = []
-    if with_staff_sections:
-        groups.append(
-            f"## Has E3SM staff ({len(with_staff_sections)})\n\n"
-            + "\n\n".join(with_staff_sections)
-        )
-    if without_staff_sections:
-        groups.append(
-            f"## No E3SM staff ({len(without_staff_sections)})\n\n"
-            + "\n\n".join(without_staff_sections)
-        )
-    if malformed_sections:
-        groups.append(
-            f"## Malformed Abstracts ({len(malformed_sections)})\n\n"
-            + "\n\n".join(malformed_sections)
-        )
-    missing_section = _build_missing_section(missing_records)
-    if missing_section:
-        groups.append(missing_section)
-
-    return "\n\n".join(groups), stats
+    return "\n\n".join(top_groups), stats
 
 
 def _build_counts_section(rows, known_awards, stats):
     """
-    Renders the top-level Counts section. The "both / staff / no staff /
-    malformed" figures all come from `stats`, which build_report derives
-    from the exact same matching pass used to render the report body —
-    so these numbers are guaranteed to sum correctly and agree with the
-    sections below (unlike computing them separately via title-set
-    arithmetic, which can diverge whenever a match happens via the PI
-    fallback rather than an exact title match).
-
-    The trailing "Has E3SM connection (Yes)" block is a separate split,
-    based purely on the "Has E3SM connection" column from
-    known_relevant_awards, restricted to matched/PAMS-confirmed projects
-    (since staff presence is only knowable for those). Each sub-bullet
-    lists the actual project titles rather than just a count. It does
-    not affect, and is not affected by, the sections above it.
+    Renders the top-level "# Counts" section. All figures come from
+    `stats`, which build_report derives from the exact same matching
+    pass used to render the report body — so these numbers are
+    guaranteed to sum correctly and agree with the sections below
+    (unlike computing them separately via title-set arithmetic, which
+    can diverge whenever a match happens via the PI fallback rather than
+    an exact title match).
     """
-    on_pams_not_known = len(rows) - stats["matched"]
-    connection_yes_with_staff_titles = stats["connection_yes_with_staff_titles"]
-    connection_yes_without_staff_titles = stats["connection_yes_without_staff_titles"]
-    connection_yes_total = len(connection_yes_with_staff_titles) + len(
-        connection_yes_without_staff_titles
-    )
-
-    def _title_bullets(titles, indent="    "):
-        return [f"{indent}- {t}" for t in titles] if titles else [f"{indent}- _none_"]
+    on_pams_not_known = len(rows) - stats["found_in_pams"]
 
     lines = [
-        "## Counts",
+        "# Counts",
         "",
         f"- Awards in PAMS export: {len(rows)}",
         f"- Awards in known_relevant_awards: {len(known_awards)}",
         f"- On PAMS but not in known_relevant_awards: {on_pams_not_known}",
-        f"- In known_relevant_awards but not on PAMS: {stats['not_in_pams']}",
-        f"- In both PAMS export and known_relevant_awards: {stats['matched']}",
-        f"  - Have E3SM staff: {stats['with_staff']}",
-        f"  - No E3SM staff: {stats['without_staff']}",
-        f"  - Malformed abstracts: {stats['malformed']}",
-        f"- Has E3SM connection noted on Confluence: {connection_yes_total}",
-        f"  - Have E3SM staff ({len(connection_yes_with_staff_titles)}):",
-        *_title_bullets(connection_yes_with_staff_titles),
-        f"  - No E3SM staff ({len(connection_yes_without_staff_titles)}):",
-        *_title_bullets(connection_yes_without_staff_titles),
+        f"- Found in PAMS ({stats['found_in_pams']}):",
+        f"  - Has E3SM staff according to the abstract: {stats['found_abstract_staff']}",
+        f"  - Has E3SM staff but only noted on Confluence: {stats['found_confluence_only_staff']}",
+        f"  - No E3SM staff: {stats['found_no_staff']}",
+        f"  - Malformed abstracts: {stats['found_malformed']}",
+        f"- Not found in PAMS ({stats['not_found_in_pams']}):",
+        f"  - Has E3SM staff but only noted on Confluence: {stats['notfound_confluence_staff']}",
+        f"  - No E3SM staff: {stats['notfound_no_staff']}",
     ]
     return "\n".join(lines)
 
