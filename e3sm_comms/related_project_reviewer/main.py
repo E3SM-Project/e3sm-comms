@@ -29,12 +29,16 @@ INPUT_MALFORMED_ABSTRACTS = (
 )
 
 # CSV of E3SM-related awards tracked on Confluence, with keys:
-#   PI Last Name,PI First Name,Title,Genesis Mission Focus Area
+#   PI Last Name,PI First Name,Title,Genesis Mission Focus Area,Has E3SM connection
 # Each row is a known-relevant award. "Title" and PI name are used to
 # match against the PAMS export (title first, PI as a fallback when no
 # title match is found). "Genesis Mission Focus Area" is the focus area
 # code (e.g. "15-C") as recorded on Confluence, which is reported
 # alongside any focus area code found in the PAMS abstract text.
+# "Has E3SM connection" ("Yes"/"No") is used ONLY to build the
+# connection-based staff split reported in the Counts section — it does
+# not affect matching against PAMS or which report section a project
+# lands in.
 INPUT_KNOWN_RELEVANT_AWARDS = (
     f"{IO_DIR}/input/related_project_reviewer/e3sm_related_awards.csv"
 )
@@ -250,9 +254,15 @@ def _get_known_award_pi(row):
 def load_known_awards(path):
     """
     Loads e3sm_related_awards.csv (keys: PI Last Name, PI First Name,
-    Title, Genesis Mission Focus Area) into a list of records, each a
-    dict with keys "pi", "title", "focus_area". Rows with neither a title
-    nor a PI are skipped.
+    Title, Genesis Mission Focus Area, Has E3SM connection) into a list
+    of records, each a dict with keys "pi", "title", "focus_area",
+    "connection". Rows with neither a title nor a PI are skipped.
+
+    "connection" is the raw casefolded value of "Has E3SM connection"
+    (e.g. "yes", "no", or "" if blank/absent). It is used ONLY to build
+    the connection-based staff split in the Counts section — it plays no
+    role in matching against PAMS or in which report section a matched
+    project is rendered under.
     """
     with open(path, encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
@@ -263,9 +273,19 @@ def load_known_awards(path):
             focus_area = _normalize(
                 _get_field(row, "Genesis Mission Focus Area", "Focus Area")
             )
+            connection = _normalize(
+                _get_field(row, "Has E3SM connection", "E3SM Connection")
+            ).casefold()
             if not title and not pi:
                 continue
-            records.append({"pi": pi, "title": title, "focus_area": focus_area or None})
+            records.append(
+                {
+                    "pi": pi,
+                    "title": title,
+                    "focus_area": focus_area or None,
+                    "connection": connection,
+                }
+            )
         return records
 
 
@@ -355,10 +375,17 @@ def build_report(rows, known_awards, staff_list, focus_areas, malformed_titles=N
             "without_staff": <int>,
             "malformed": <int>,
             "not_in_pams": <int, known awards with no matching PAMS row>,
+            "connection_yes_with_staff_titles": <list[str]>,
+            "connection_yes_without_staff_titles": <list[str]>,
         }
     `stats` is the single source of truth for counts elsewhere in the
     report (e.g. the Counts section), so it never has to be recomputed
     independently and risk disagreeing with the body of the report.
+
+    The two "connection_yes_*_titles" lists are derived solely for the
+    Counts section's connection-based split (see load_known_awards) and
+    do NOT affect which section (with_staff/without_staff/malformed) a
+    project is rendered under in the report body.
     """
     malformed_titles = malformed_titles or set()
     title_to_record, pi_variant_to_records = index_known_awards(known_awards)
@@ -367,6 +394,8 @@ def build_report(rows, known_awards, staff_list, focus_areas, malformed_titles=N
     without_staff_sections = []
     malformed_sections = []
     matched_ids = set()
+    connection_yes_with_staff_titles = []
+    connection_yes_without_staff_titles = []
 
     for row in rows:
         record = _match_known_award(row, title_to_record, pi_variant_to_records)
@@ -385,6 +414,13 @@ def build_report(rows, known_awards, staff_list, focus_areas, malformed_titles=N
         staff = find_staff(abstract, pi, staff_list)
         section = _build_section(title, fa_display, pi, staff, abstract)
 
+        if record.get("connection") == "yes":
+            label = title or "(untitled project)"
+            if staff:
+                connection_yes_with_staff_titles.append(label)
+            else:
+                connection_yes_without_staff_titles.append(label)
+
         if title and title.casefold() in malformed_titles:
             malformed_sections.append(section)
         elif staff:
@@ -400,6 +436,8 @@ def build_report(rows, known_awards, staff_list, focus_areas, malformed_titles=N
         "without_staff": len(without_staff_sections),
         "malformed": len(malformed_sections),
         "not_in_pams": len(missing_records),
+        "connection_yes_with_staff_titles": connection_yes_with_staff_titles,
+        "connection_yes_without_staff_titles": connection_yes_without_staff_titles,
     }
 
     if (
@@ -442,8 +480,23 @@ def _build_counts_section(rows, known_awards, stats):
     sections below (unlike computing them separately via title-set
     arithmetic, which can diverge whenever a match happens via the PI
     fallback rather than an exact title match).
+
+    The trailing "Has E3SM connection (Yes)" block is a separate split,
+    based purely on the "Has E3SM connection" column from
+    known_relevant_awards, restricted to matched/PAMS-confirmed projects
+    (since staff presence is only knowable for those). Each sub-bullet
+    lists the actual project titles rather than just a count. It does
+    not affect, and is not affected by, the sections above it.
     """
     on_pams_not_known = len(rows) - stats["matched"]
+    connection_yes_with_staff_titles = stats["connection_yes_with_staff_titles"]
+    connection_yes_without_staff_titles = stats["connection_yes_without_staff_titles"]
+    connection_yes_total = len(connection_yes_with_staff_titles) + len(
+        connection_yes_without_staff_titles
+    )
+
+    def _title_bullets(titles, indent="    "):
+        return [f"{indent}- {t}" for t in titles] if titles else [f"{indent}- _none_"]
 
     lines = [
         "## Counts",
@@ -456,6 +509,11 @@ def _build_counts_section(rows, known_awards, stats):
         f"  - Have E3SM staff: {stats['with_staff']}",
         f"  - No E3SM staff: {stats['without_staff']}",
         f"  - Malformed abstracts: {stats['malformed']}",
+        f"- Has E3SM connection noted on Confluence: {connection_yes_total}",
+        f"  - Have E3SM staff ({len(connection_yes_with_staff_titles)}):",
+        *_title_bullets(connection_yes_with_staff_titles),
+        f"  - No E3SM staff ({len(connection_yes_without_staff_titles)}):",
+        *_title_bullets(connection_yes_without_staff_titles),
     ]
     return "\n".join(lines)
 
