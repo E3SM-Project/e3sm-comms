@@ -338,10 +338,28 @@ def _build_missing_section(missing_records):
         else:
             label = "(no title or PI)"
         bullets.append(f"- {label}")
-    return "## Not found in PAMS export\n\n" + "\n".join(bullets)
+    return f"## Not found in PAMS export ({len(missing_records)})\n\n" + "\n".join(
+        bullets
+    )
 
 
 def build_report(rows, known_awards, staff_list, focus_areas, malformed_titles=None):
+    """
+    Matches PAMS rows against known_relevant_awards and buckets each
+    match into one of three mutually-exclusive groups: malformed (title
+    is in malformed_titles), has-staff, or no-staff. Returns the
+    rendered report body along with a `stats` dict:
+        {
+            "matched": <int, total PAMS rows matched to a known award>,
+            "with_staff": <int>,
+            "without_staff": <int>,
+            "malformed": <int>,
+            "not_in_pams": <int, known awards with no matching PAMS row>,
+        }
+    `stats` is the single source of truth for counts elsewhere in the
+    report (e.g. the Counts section), so it never has to be recomputed
+    independently and risk disagreeing with the body of the report.
+    """
     malformed_titles = malformed_titles or set()
     title_to_record, pi_variant_to_records = index_known_awards(known_awards)
 
@@ -376,56 +394,68 @@ def build_report(rows, known_awards, staff_list, focus_areas, malformed_titles=N
 
     missing_records = [r for r in known_awards if id(r) not in matched_ids]
 
+    stats = {
+        "matched": len(matched_ids),
+        "with_staff": len(with_staff_sections),
+        "without_staff": len(without_staff_sections),
+        "malformed": len(malformed_sections),
+        "not_in_pams": len(missing_records),
+    }
+
     if (
         not with_staff_sections
         and not without_staff_sections
         and not malformed_sections
         and not missing_records
     ):
-        return "_No related projects found._\n"
+        return "_No related projects found._\n", stats
 
     groups = []
     if with_staff_sections:
-        groups.append("## Has E3SM staff\n\n" + "\n\n".join(with_staff_sections))
+        groups.append(
+            f"## Has E3SM staff ({len(with_staff_sections)})\n\n"
+            + "\n\n".join(with_staff_sections)
+        )
     if without_staff_sections:
-        groups.append("## No E3SM staff\n\n" + "\n\n".join(without_staff_sections))
+        groups.append(
+            f"## No E3SM staff ({len(without_staff_sections)})\n\n"
+            + "\n\n".join(without_staff_sections)
+        )
     if malformed_sections:
-        groups.append("## Malformed Abstracts\n\n" + "\n\n".join(malformed_sections))
+        groups.append(
+            f"## Malformed Abstracts ({len(malformed_sections)})\n\n"
+            + "\n\n".join(malformed_sections)
+        )
     missing_section = _build_missing_section(missing_records)
     if missing_section:
         groups.append(missing_section)
 
-    return "\n\n".join(groups)
+    return "\n\n".join(groups), stats
 
 
-def _build_counts_section(rows, known_awards, staff_list):
-    pams_titles = {row["Title"].casefold() for row in rows if row["Title"]}
-    known_titles = {r["title"].casefold() for r in known_awards if r["title"]}
-    found_not_known = pams_titles - known_titles
-    known_not_found = known_titles - pams_titles
-    both_titles = pams_titles & known_titles
-
-    with_staff_count = 0
-    without_staff_count = 0
-    for row in rows:
-        title = row["Title"]
-        if title and title.casefold() in both_titles:
-            staff = find_staff(row["Abstract"], row["PI"], staff_list)
-            if staff:
-                with_staff_count += 1
-            else:
-                without_staff_count += 1
+def _build_counts_section(rows, known_awards, stats):
+    """
+    Renders the top-level Counts section. The "both / staff / no staff /
+    malformed" figures all come from `stats`, which build_report derives
+    from the exact same matching pass used to render the report body —
+    so these numbers are guaranteed to sum correctly and agree with the
+    sections below (unlike computing them separately via title-set
+    arithmetic, which can diverge whenever a match happens via the PI
+    fallback rather than an exact title match).
+    """
+    on_pams_not_known = len(rows) - stats["matched"]
 
     lines = [
         "## Counts",
         "",
         f"- Awards in PAMS export: {len(rows)}",
         f"- Awards in known_relevant_awards: {len(known_awards)}",
-        f"- On PAMS but not in known_relevant_awards (by title): {len(found_not_known)}",
-        f"- In known_relevant_awards but not on PAMS (by title): {len(known_not_found)}",
-        f"- In both PAMS export and known_relevant_awards (by title): {len(both_titles)}",
-        f"  - Have E3SM staff: {with_staff_count}",
-        f"  - No E3SM staff: {without_staff_count}",
+        f"- On PAMS but not in known_relevant_awards: {on_pams_not_known}",
+        f"- In known_relevant_awards but not on PAMS: {stats['not_in_pams']}",
+        f"- In both PAMS export and known_relevant_awards: {stats['matched']}",
+        f"  - Have E3SM staff: {stats['with_staff']}",
+        f"  - No E3SM staff: {stats['without_staff']}",
+        f"  - Malformed abstracts: {stats['malformed']}",
     ]
     return "\n".join(lines)
 
@@ -437,8 +467,10 @@ def main():
     focus_areas = load_focus_areas(INPUT_FOCUS_AREAS)
     malformed_titles = load_malformed_titles(INPUT_MALFORMED_ABSTRACTS)
 
-    counts_section = _build_counts_section(rows, known_awards, staff_list)
-    body = build_report(rows, known_awards, staff_list, focus_areas, malformed_titles)
+    body, stats = build_report(
+        rows, known_awards, staff_list, focus_areas, malformed_titles
+    )
+    counts_section = _build_counts_section(rows, known_awards, stats)
     report = f"{counts_section}\n\n{body}"
 
     out_path = Path(OUTPUT_REPORT)
