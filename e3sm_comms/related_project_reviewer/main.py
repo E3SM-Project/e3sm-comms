@@ -57,7 +57,12 @@ def _normalize(s):
 def _load_lines(path):
     """Read a text file into a list of non-empty, whitespace-normalized lines."""
     with open(path, encoding="utf-8-sig") as f:
-        return [_normalize(line) for line in f if _normalize(line)]
+        lines = []
+        for line in f:
+            norm = _normalize(line)
+            if norm:
+                lines.append(norm)
+        return lines
 
 
 def load_known_staff(path):
@@ -493,8 +498,15 @@ def build_report(rows, known_awards, staff_list, focus_areas, malformed_titles=N
         else:
             notfound_no_staff_sections.append(section)
 
+    found_in_pams = (
+        len(found_abstract_staff_sections)
+        + len(found_confluence_only_sections)
+        + len(found_no_staff_sections)
+        + len(found_malformed_sections)
+    )
+
     stats = {
-        "found_in_pams": len(matched_ids),
+        "found_in_pams": found_in_pams,
         "not_found_in_pams": len(missing_records),
         "found_abstract_staff": len(found_abstract_staff_sections),
         "found_confluence_only_staff": len(found_confluence_only_sections),
