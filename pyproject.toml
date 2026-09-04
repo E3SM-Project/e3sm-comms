@@ -119,7 +119,6 @@ e3sm-comms-newsletter-reviewer = "e3sm_comms.newsletter_reviewer.main:main"
 e3sm-comms-resource-reviewer = "e3sm_comms.resource_reviewer.main:main"
 e3sm-comms-website-reviewer = "e3sm_comms.website_reviewer.main:main"
 # These do not:
-e3sm-comms-e3sm-org-reviewer = "e3sm_comms.e3sm_org_reviewer.main:main"
 e3sm-comms-exported-xml-reviewer = "e3sm_comms.exported_xml_reviewer.main:main"
 e3sm-comms-html-reviewer = "e3sm_comms.html_reviewer.main:main"
 e3sm-comms-related-project-reviewer = "e3sm_comms.related_project_reviewer.main:main"

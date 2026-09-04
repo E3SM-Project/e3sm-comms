@@ -582,7 +582,7 @@ def write_non_published_accessibility_report(
     with open(output_file, "w", encoding="utf-8") as f:
         f.write("# Non-Published Pages That Are Still Accessible\n\n")
         f.write(
-            "For every page/post whose WordPress status is not \"publish\", this "
+            'For every page/post whose WordPress status is not "publish", this '
             "checks the live e3sm.org URL (logged out) and flags it here if it's "
             "actually reachable without logging in.\n\n"
         )
@@ -604,8 +604,8 @@ def write_navigation_issues_report(
     output_path: str,
     top_level_issues: List[TopLevelPageIssue],
     archived_parent_published_child_issues: List[ArchivedParentPublishedChildIssue],
-    should_be_archived: List[tuple] = (),
-    published_not_in_confluence: List[tuple] = (),
+    should_be_archived: List[tuple],
+    published_not_in_confluence: List[tuple],
 ) -> None:
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -675,6 +675,4 @@ def write_navigation_issues_report(
             for title, url in published_not_in_confluence:
                 f.write(f"| {title} | {url} |\n")
         else:
-            f.write(
-                "No pages/posts found (or `--use-confluence` was not passed).\n"
-            )
+            f.write("No pages/posts found (or `--use-confluence` was not passed).\n")

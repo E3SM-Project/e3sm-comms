@@ -213,7 +213,7 @@ def build_should_be_archived(
     expected_archived_file: str,
 ) -> List[Tuple[str, str]]:
     """
-    Ported from e3sm_org_reviewer.classifiers: cross-reference a manually
+    Cross-reference a manually
     curated list of e3sm.org paths that are expected to be archived against
     each page/post's actual WordPress status, and flag any that have not
     actually been archived yet. Returns (title, url) pairs, sorted by title.
@@ -245,13 +245,11 @@ def build_published_not_in_confluence(
     whitelisted_urls: Set[str],
 ) -> List[Tuple[str, str]]:
     """
-    Ported from e3sm_org_reviewer.main: published pages/posts with no
-    corresponding entry in the Confluence-predicted URL map, i.e. content
-    that's live on e3sm.org but has no source-of-truth Confluence page.
-    Restricted to whitelisted URLs, mirroring the original tool's
-    `published_not_whitelisted_and_not_in_confluence` check. Returns
-    (title, url) pairs, sorted by title. Empty if no Confluence hierarchy
-    file was supplied.
+    Published pages/posts with no corresponding entry in the
+    Confluence-predicted URL map, i.e. content that's live on
+    e3sm.org but has no source-of-truth Confluence page.
+    Restricted to whitelisted URLs. Returns (title, url) pairs,
+    sorted by title. Empty if no Confluence hierarchy file was supplied.
     """
     if not confluence_map:
         return []
@@ -272,7 +270,7 @@ def build_accessible_non_published_issues(
     raw_items: List[WordpressItem],
 ) -> List[AccessibleNonPublishedIssue]:
     """
-    Ported from e3sm_org_reviewer.main: for every non-published page/post,
+    For every non-published page/post,
     make a live, logged-out HTTP request to its e3sm.org URL and flag it if
     the page is actually reachable. Draft/private/pending/future content
     should 404 or redirect to a login when fetched without credentials; if

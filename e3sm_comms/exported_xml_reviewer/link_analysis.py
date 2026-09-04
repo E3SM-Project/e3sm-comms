@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import DefaultDict, List, Set, Tuple
 from urllib.parse import urlsplit
 
-import requests  # type: ignore
+import requests
 
 from e3sm_comms.exported_xml_reviewer.utils import (
     display_status,

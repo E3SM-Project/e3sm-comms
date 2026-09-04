@@ -47,8 +47,9 @@ DEFAULT_CONFLUENCE_HIERARCHY: str = (
 DEFAULT_WHITELIST: str = (
     f"{IO_DIR}/input/exported_xml_reviewer/whitelisted_web_pages.txt"
 )
-# Ported from e3sm_org_reviewer: same shared file it used for this input.
-DEFAULT_EXPECTED_ARCHIVED: str = f"{IO_DIR}/input/shared/archived_web_pages.txt"
+DEFAULT_EXPECTED_ARCHIVED: str = (
+    f"{IO_DIR}/input/exported_xml_reviewer/archived_web_pages.txt"
+)
 DEFAULT_KEEP_UNCHANGED: str = (
     f"{IO_DIR}/input/exported_xml_reviewer/keep_unchanged_web_pages.txt"
 )
