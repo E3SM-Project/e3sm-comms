@@ -6,10 +6,6 @@ This package is for implementing the software needs of the E3SM Communications t
 
 ### Simple commands
 
-`e3sm-comms-e3sm-org-reviewer`
-- input: txt file listing e3sm.org pages to review, txt file containing phrases to search for
-- output: txt file listing e3sm.org pages containing those phrases
-
 `e3sm-comms-html-reviewer`
 - input: 1 txt file of html copied from WordPress that includes yellow highlights left over from Confluence.
 - output: 1 txt file of html with those highlights removed.
@@ -22,6 +18,14 @@ This package is for implementing the software needs of the E3SM Communications t
 `e3sm-comms-video-reviewer`
 - input: txt file of time intervals to cut from the video, txt file of initial timestamps
 - output: txt file of new timestamps after cutting the specified intervals
+
+`e3sm-comms-exported-xml-reviewer`
+- input:
+  - From WordPress under Tools > Export: xml file of WordPress pages, xml file of WordPress posts. NOTE: Only ever use the XML files downloaded directly from WordPress; the source must be trusted.
+  - From output of `e3sm-comms-website-reviewer`: txt file of hierarchical outline of Confluence pages
+  - Other: txt file of sensitive terms, txt file of whitelisted e3sm.org pages, txt file of links known to be inaccessible for automated review
+- output: 6 files under `output/exported_xml_reviewer/`: (1) `wordpress_sensitive_terms_report.md`, (2) `wordpress_hierarchical_outline.txt`, (3) `wordpress_navigation_issues_report.md`, (4) `wordpress_invalid_internal_links_report.md`, (5) `wordpress_published_pages_link_report.md`, (6) `wordpress_invalid_external_links_report.md`
+- output (optional, with `--check-non-published-access`): also `wordpress_non_published_accessibility_report.md`
 
 ### Confluence API commands (require Confluence token)
 
