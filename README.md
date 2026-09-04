@@ -25,6 +25,7 @@ This package is for implementing the software needs of the E3SM Communications t
   - From output of `e3sm-comms-website-reviewer`: txt file of hierarchical outline of Confluence pages
   - Other: txt file of sensitive terms, txt file of whitelisted e3sm.org pages, txt file of links known to be inaccessible for automated review
 - output: 6 files under `output/exported_xml_reviewer/`: (1) `wordpress_sensitive_terms_report.md`, (2) `wordpress_hierarchical_outline.txt`, (3) `wordpress_navigation_issues_report.md`, (4) `wordpress_invalid_internal_links_report.md`, (5) `wordpress_published_pages_link_report.md`, (6) `wordpress_invalid_external_links_report.md`
+- output (optional, with `--check-non-published-access`): also `wordpress_non_published_accessibility_report.md`
 
 ### Confluence API commands (require Confluence token)
 

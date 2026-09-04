@@ -32,3 +32,5 @@ echo "3. ${IO_DIR}/output/exported_xml_reviewer/wordpress_navigation_issues_repo
 echo "4. ${IO_DIR}/output/exported_xml_reviewer/wordpress_invalid_internal_links_report.md"
 echo "5. ${IO_DIR}/output/exported_xml_reviewer/wordpress_published_pages_link_report.md"
 echo "6. ${IO_DIR}/output/exported_xml_reviewer/wordpress_invalid_external_links_report.md"
+echo "Optional (pass --check-non-published-access to also get):"
+echo "7. ${IO_DIR}/output/exported_xml_reviewer/wordpress_non_published_accessibility_report.md"

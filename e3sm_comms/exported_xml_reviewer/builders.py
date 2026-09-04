@@ -20,7 +20,6 @@ from e3sm_comms.exported_xml_reviewer.readers import (
     read_whitelist_patterns,
 )
 from e3sm_comms.exported_xml_reviewer.utils import (
-    count_sensitive_terms,
     display_status,
     normalize_status,
     strip_html,
@@ -28,6 +27,7 @@ from e3sm_comms.exported_xml_reviewer.utils import (
 from e3sm_comms.page_reviewer.utils_base import get_e3sm_url_status
 from e3sm_comms.utils import (
     WordpressItem,
+    count_sensitive_terms,
     expand_patterns_to_urls,
     normalize_url,
     parse_wordpress_xml_items,
@@ -75,6 +75,7 @@ class PublishedContentLinkSummary:
     url: str
     archived_links: List[str]
     redirected_links: List[str]
+    timed_out_links: List[str]
     broken_links: List[str]
     valid_links: List[str]
 
@@ -411,6 +412,7 @@ def build_published_content_link_summaries(
 
         archived_links: Set[str] = set()
         redirected_links: Set[str] = set()
+        timed_out_links: Set[str] = set()
         broken_links: Set[str] = set()
         valid_links: Set[str] = set()
 
@@ -426,10 +428,17 @@ def build_published_content_link_summaries(
                     valid_links.add(linked_norm)
                 continue
 
-            redirect_target, _redirect_status = check_redirect_target(linked_norm)
+            # check_redirect_target is memoized (see link_analysis.py), so
+            # for any URL already looked up by build_invalid_internal_link_groups()
+            # this reuses the cached result instead of firing another request.
+            redirect_target, _redirect_status, timed_out = check_redirect_target(
+                linked_norm
+            )
             if redirect_target and normalize_url(redirect_target) in actual_urls:
                 redirected_links.add(linked_norm)
                 valid_links.add(linked_norm)
+            elif timed_out:
+                timed_out_links.add(linked_norm)
             else:
                 broken_links.add(linked_norm)
 
@@ -439,6 +448,7 @@ def build_published_content_link_summaries(
                 url=item.url,
                 archived_links=sorted(archived_links),
                 redirected_links=sorted(redirected_links),
+                timed_out_links=sorted(timed_out_links),
                 broken_links=sorted(broken_links),
                 valid_links=sorted(valid_links),
             )

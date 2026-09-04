@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional
+from typing import Optional
 from urllib.parse import urlsplit
 
 
@@ -44,17 +44,3 @@ def is_legacy_content_url(url: str) -> bool:
     parts = urlsplit(url)
     slug = parts.path.strip("/").lower()
     return bool(re.fullmatch(r"\d{6,8}[_-].+", slug))
-
-
-def count_sensitive_terms(text: str, terms: List[str]) -> Dict[str, int]:
-    counts: Dict[str, int] = {}
-    lowered = text.lower()
-
-    for term in terms:
-        escaped = re.escape(term)
-        pattern = rf"\b{escaped}\b"
-        matches = re.findall(pattern, lowered)
-        if matches:
-            counts[term] = len(matches)
-
-    return counts

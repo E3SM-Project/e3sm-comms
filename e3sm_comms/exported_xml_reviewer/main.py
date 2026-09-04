@@ -153,7 +153,6 @@ def main() -> None:
         OUTPUT_TERMS_REPORT,
         records,
         status_totals,
-        requested_link_records,
     )
 
     write_hierarchical_outline(
@@ -171,6 +170,7 @@ def main() -> None:
         archived_parent_published_child_issues,
         should_be_archived=should_be_archived,
         published_not_in_confluence=published_not_in_confluence,
+        requested_link_records=requested_link_records,
     )
 
     invalid_link_groups = build_invalid_internal_link_groups(raw_items)

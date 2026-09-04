@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import DefaultDict, List, Set, Tuple
 from urllib.parse import urlsplit
 
@@ -23,6 +24,7 @@ class InvalidInternalLinkGroup:
     linked_url: str
     redirect_target: str
     redirect_status: str
+    timed_out: bool
     inferred_link: str
     found_under_different_prefix: str
     linked_target_status: str
@@ -88,22 +90,34 @@ def extract_internal_e3sm_links(html_text: str) -> Set[str]:
     return links
 
 
-def check_redirect_target(link_url: str) -> Tuple[str, str]:
+@lru_cache(maxsize=None)
+def check_redirect_target(link_url: str) -> Tuple[str, str, bool]:
+    """
+    Returns (final_url, redirect_status, timed_out).
+
+    Memoized per URL: the same linked URL can be referenced by many
+    pages/posts, and is looked up by both build_invalid_internal_link_groups()
+    and build_published_content_link_summaries(). Caching here means each
+    unique URL is only ever fetched once per process, regardless of how many
+    callers ask about it -- mirroring the dedup that check_external_link's
+    callers already do for external links.
+    """
     try:
         response = requests.get(link_url, timeout=10, allow_redirects=True)
-        redirect_status = ""
 
         if response.history:
             first_response = response.history[0]
             if first_response.status_code in {301, 302, 303, 307, 308} and response.ok:
                 final_url = normalize_url(response.url)
                 redirect_status = str(first_response.status_code)
-                return final_url, redirect_status
+                return final_url, redirect_status, False
 
-        return "", ""
+        return "", "", False
 
-    except (requests.exceptions.Timeout, requests.exceptions.RequestException):
-        return "", ""
+    except requests.exceptions.Timeout:
+        return "", "", True
+    except requests.exceptions.RequestException:
+        return "", "", False
 
 
 def extract_external_links(html_text: str) -> Set[str]:
@@ -257,7 +271,7 @@ def build_invalid_internal_link_groups(
     )
 
     for linked_url in all_linked_urls:
-        redirect_target, redirect_status = check_redirect_target(linked_url)
+        redirect_target, redirect_status, timed_out = check_redirect_target(linked_url)
 
         inferred_candidate = infer_likely_new_link(linked_url)
         inferred_link = (
@@ -286,6 +300,7 @@ def build_invalid_internal_link_groups(
                 linked_url=linked_url,
                 redirect_target=redirect_target,
                 redirect_status=redirect_status,
+                timed_out=timed_out,
                 inferred_link=inferred_link,
                 found_under_different_prefix=found_under_different_prefix,
                 linked_target_status=linked_target_status,

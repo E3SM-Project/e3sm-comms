@@ -26,7 +26,6 @@ def write_terms_report(
     output_path: str,
     records: List[ReportRecord],
     status_totals: Dict[str, int],
-    requested_link_records: List[RequestedLinkRecord],
 ) -> None:
     grouped: DefaultDict[str, List[ReportRecord]] = defaultdict(list)
     for record in records:
@@ -89,31 +88,6 @@ def write_terms_report(
             f"| TOTAL | {total_with_terms} | {total_without_terms} | {grand_total} |\n"
         )
         f.write("\n")
-
-        if requested_link_records:
-            requested_link_records = sort_requested_link_records(requested_link_records)
-
-            f.write("## Requested Links\n\n")
-            f.write(
-                "| e3sm.org link | Included later on this page? | Current status | Currently whitelisted? | Requesting URLs |\n"
-            )
-            f.write("| --- | --- | --- | --- | --- |\n")
-
-            for requested_record in requested_link_records:
-                included_later = (
-                    "Yes"
-                    if requested_record.included_later
-                    else "No (i.e., contains no sensitive terms)"
-                )
-                currently_whitelisted = (
-                    "Yes" if requested_record.currently_whitelisted else "No"
-                )
-                f.write(
-                    f"| {requested_record.e3sm_url} | {included_later} | {requested_record.current_status} | "
-                    f"{currently_whitelisted} | {requested_record.requesting_urls} |\n"
-                )
-
-            f.write("\n")
 
         all_statuses = ordered_statuses + extra_statuses
         seen = set()
@@ -207,6 +181,7 @@ def write_invalid_internal_links_report(
             )
 
     working_redirects: List[InvalidInternalLinkGroup] = []
+    timed_out_checks: List[InvalidInternalLinkGroup] = []
     published_targets: List[InvalidInternalLinkGroup] = []
     archived_targets: List[InvalidInternalLinkGroup] = []
     no_candidate: List[InvalidInternalLinkGroup] = []
@@ -214,6 +189,8 @@ def write_invalid_internal_links_report(
     for group in groups:
         if group.redirect_target:
             working_redirects.append(group)
+        elif group.timed_out:
+            timed_out_checks.append(group)
         elif group.linked_target_status == "Published":
             published_targets.append(group)
         elif group.linked_target_status == "Archived":
@@ -238,7 +215,16 @@ def write_invalid_internal_links_report(
         f.write("\n")
 
         f.write(
-            f"## 2. The target pages are published, we just need to set up the redirections ({len(published_targets)})\n\n"
+            f"## 2. Redirect check timed out -- couldn't verify ({len(timed_out_checks)})\n\n"
+        )
+        if timed_out_checks:
+            render_table(f, timed_out_checks)
+        else:
+            f.write("None found.\n")
+        f.write("\n")
+
+        f.write(
+            f"## 3. The target pages are published, we just need to set up the redirections ({len(published_targets)})\n\n"
         )
         if published_targets:
             render_table(f, published_targets)
@@ -246,7 +232,7 @@ def write_invalid_internal_links_report(
             f.write("None found.\n")
         f.write("\n")
 
-        f.write(f"## 3. The target pages are archived ({len(archived_targets)})\n\n")
+        f.write(f"## 4. The target pages are archived ({len(archived_targets)})\n\n")
         if archived_targets:
             render_table(f, archived_targets)
         else:
@@ -254,7 +240,7 @@ def write_invalid_internal_links_report(
         f.write("\n")
 
         f.write(
-            f"## 4. Couldn't find a redirection candidate ({len(no_candidate)})\n\n"
+            f"## 5. Couldn't find a redirection candidate ({len(no_candidate)})\n\n"
         )
         if no_candidate:
             render_table(f, no_candidate)
@@ -263,7 +249,7 @@ def write_invalid_internal_links_report(
         f.write("\n")
 
         f.write(
-            f"## 5. Technically valid links that point to non-published targets ({len(non_published_groups)})\n\n"
+            f"## 6. Technically valid links that point to non-published targets ({len(non_published_groups)})\n\n"
         )
         if non_published_groups:
             render_non_published_table(f, non_published_groups)
@@ -290,12 +276,20 @@ def write_published_pages_link_report(
         invalid_summaries = [
             s
             for s in summaries
-            if s.archived_links or s.redirected_links or s.broken_links
+            if s.archived_links
+            or s.redirected_links
+            or s.timed_out_links
+            or s.broken_links
         ]
         valid_only_summaries = [
             s
             for s in summaries
-            if not (s.archived_links or s.redirected_links or s.broken_links)
+            if not (
+                s.archived_links
+                or s.redirected_links
+                or s.timed_out_links
+                or s.broken_links
+            )
         ]
 
         f.write(f"## {section_title}\n\n")
@@ -307,17 +301,19 @@ def write_published_pages_link_report(
         f.write(f"### Items with invalid links ({len(invalid_summaries)})\n\n")
         if invalid_summaries:
             f.write(
-                "| Published item | known archived links | published item, wrong URL, but redirection working | link does not work | valid e3sm.org links |\n"
+                "| Published item | known archived links | published item, wrong URL, but redirection working | link timed out (unverified) | link does not work | valid e3sm.org links |\n"
             )
-            f.write("| --- | --- | --- | --- | --- |\n")
+            f.write("| --- | --- | --- | --- | --- | --- |\n")
 
             archived_total = 0
             redirected_total = 0
+            timed_out_total = 0
             broken_total = 0
             valid_total = 0
 
             archived_unique: Set[str] = set()
             redirected_unique: Set[str] = set()
+            timed_out_unique: Set[str] = set()
             broken_unique: Set[str] = set()
             valid_unique: Set[str] = set()
 
@@ -325,28 +321,31 @@ def write_published_pages_link_report(
                 item_md = f"[{summary.title}]({summary.url})"
                 archived_md = render_link_list(summary.archived_links)
                 redirected_md = render_link_list(summary.redirected_links)
+                timed_out_md = render_link_list(summary.timed_out_links)
                 broken_md = render_link_list(summary.broken_links)
                 valid_md = render_link_list(summary.valid_links)
 
                 archived_total += len(summary.archived_links)
                 redirected_total += len(summary.redirected_links)
+                timed_out_total += len(summary.timed_out_links)
                 broken_total += len(summary.broken_links)
                 valid_total += len(summary.valid_links)
 
                 archived_unique.update(summary.archived_links)
                 redirected_unique.update(summary.redirected_links)
+                timed_out_unique.update(summary.timed_out_links)
                 broken_unique.update(summary.broken_links)
                 valid_unique.update(summary.valid_links)
 
                 f.write(
-                    f"| {item_md} | {archived_md} | {redirected_md} | {broken_md} | {valid_md} |\n"
+                    f"| {item_md} | {archived_md} | {redirected_md} | {timed_out_md} | {broken_md} | {valid_md} |\n"
                 )
 
             f.write(
-                f"| Total link count | {archived_total} | {redirected_total} | {broken_total} | {valid_total} |\n"
+                f"| Total link count | {archived_total} | {redirected_total} | {timed_out_total} | {broken_total} | {valid_total} |\n"
             )
             f.write(
-                f"| Unique link count | {len(archived_unique)} | {len(redirected_unique)} | {len(broken_unique)} | {len(valid_unique)} |\n"
+                f"| Unique link count | {len(archived_unique)} | {len(redirected_unique)} | {len(timed_out_unique)} | {len(broken_unique)} | {len(valid_unique)} |\n"
             )
         else:
             f.write("No items with invalid links found.\n")
@@ -606,6 +605,7 @@ def write_navigation_issues_report(
     archived_parent_published_child_issues: List[ArchivedParentPublishedChildIssue],
     should_be_archived: List[tuple],
     published_not_in_confluence: List[tuple],
+    requested_link_records: List[RequestedLinkRecord],
 ) -> None:
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -676,3 +676,31 @@ def write_navigation_issues_report(
                 f.write(f"| {title} | {url} |\n")
         else:
             f.write("No pages/posts found (or `--use-confluence` was not passed).\n")
+
+        f.write("\n")
+
+        sorted_requested_link_records = sort_requested_link_records(
+            requested_link_records
+        )
+        f.write(f"## 5. Requested links ({len(sorted_requested_link_records)})\n\n")
+        if sorted_requested_link_records:
+            f.write(
+                "| e3sm.org link | Included later on this page? | Current status | Currently whitelisted? | Requesting URLs |\n"
+            )
+            f.write("| --- | --- | --- | --- | --- |\n")
+
+            for requested_record in sorted_requested_link_records:
+                included_later = (
+                    "Yes"
+                    if requested_record.included_later
+                    else "No (i.e., contains no sensitive terms)"
+                )
+                currently_whitelisted = (
+                    "Yes" if requested_record.currently_whitelisted else "No"
+                )
+                f.write(
+                    f"| {requested_record.e3sm_url} | {included_later} | {requested_record.current_status} | "
+                    f"{currently_whitelisted} | {requested_record.requesting_urls} |\n"
+                )
+        else:
+            f.write("No requested links found.\n")
