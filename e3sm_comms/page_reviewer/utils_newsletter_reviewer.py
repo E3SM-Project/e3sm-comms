@@ -19,106 +19,73 @@ from e3sm_comms.page_reviewer.utils_base import (
     map_confluence_to_e3sm,
 )
 
+MAILCHIMP_END_MATTER_URLS: Set[str] = {
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6524502019/2026-08+Career+Opportunities",
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6524436481/2026-08+E3SM-Related+Publications",
+}
+
 # Use this dict to keep track of acronyms that we know are defined (either through link or text expansion).
 # That way, the newsletter-reviewer won't mark them as undefined.
 # This dict maps Confluence page URLs to sets of acronyms
 KNOWN_DEFINED_ACRONYMS_DICT: Dict[str, Set[str]] = {
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6131974145/From+the+PI+May+26+Looking+Forward+to+the+Summer+All-Hands": {
-        "JAMES"
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424068247/E3SM+Decadal+Vision+2026-2036": {
+        "DOE",
     },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6132006913/Omega+A+Next-Generation+Ocean+Model+for+Exascale+Computing": {
-        "CPU",
-        "GPU",
-        "MPAS",
-        "MPI",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6154879009/Waves+in+E3SM+a+Core+Coupled+Capability+for+Polar+Coastal+Science+Energy+Applications+and+S2S2D+Prediction": {
-        "CICE",
-        "MPAS",
-        "SSP2",
-        "WAVEWATCH",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6133088269/SCREAMv1+Paper+Recognized+as+One+of+the+10+Most-Cited+JAMES+Papers+of+2024": {
-        "CPU",
-        "GPU",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6132367363/E3SM+Makes+2026+Group+Roadmaps+Public": {
-        "BER",
-        "S2D",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/5361467407/2026+INCITE+award+enables+unprecedented+simulations": {
-        "GPU"
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/5586616334/Heroic+Bug+Fixes+How+zstash+Improvements+Helped+the+High-Resolution+Team+Archive+at+Scale": {
-        "NERSC"
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6131712020/E3SM+Data+Locations+and+Policies": {
-        "BER",
-        "BGC",
-        "DECK",
-        "ESGF",
-        "HPSS",
-        "LE",
-        "LR",
-        "PB",
-        "RESOURCES",
-        "TB",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6131974211/Machine+Learning+Helps+Improve+Groundwater+Representation+in+Earth+System+Models": {
-        "2025MS005184",
-        "76RL01830",
-        "AC06",
-        "BY",
-        "CC",
-        "DE",
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6489932004/A+Roadmap+for+Adding+Lateral+Water+Transport+to+the+E3SM+Land+Model": {
+        "3D",
         "DOI",
         "ESM",
-        "KGE",
-        "NSE",
-        "SA",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6131974261/Expanding+Irrigation+Increases+Regional+Land+Water+Depletion": {
-        "ET",
-        "GRACE",
-        "LRL",
-        "WACCEM",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6132039681/Watershed-Based+Representation+Discretized+into+Topographic+Units+Better+Captures+Land+Surface+Heterogeneity": {
-        "2025MS005101",
-        "76RL01830",
-        "AC05",
-        "COMPY",
-        "DE",
-        "HUC",
-        "HUC10",
-        "NDVI",
-        "TGU",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/5536187468/Asynchronous+I+O+in+SCORPIO+Boosts+E3SM+Throughput": {
-        "CIME",
-        "HDF5",
-        "MPI",
-        "NERSC",
-        "SCORPIO",
-        "ZFP",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6131646483/E3SM-Unified+1.13.0+Brings+New+Tools+and+Analysis+Updates": {
-        "AIRS",
-        "ALCF",
-        "COSP",
-        "ELM",
-        "ESMF",
-        "GUI",
-        "HPC",
-        "ILAMB",
         "MOAB",
-        "MPAS",
-        "OLCF",
-        "NCO",
+        "MPI",
+        "NGEE",
+        "PFLOTRAN",
+        "US",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6444220417/A+Fully+Coupled+AI+Emulator+of+E3SMv3+Reproduces+Its+Statistics": {
+        "ACE2",
+        "ACE2S",
+        "H100",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424035779/Phase+4+Project+Structure": {
+        "DOE",
+        "FY27",
+        "OMEGA",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424068235/Report+from+All-Hands": {
+        "ARM",
+        "BER",
+        "DOE",
+        "LES",
         "S2D",
-        "X11",
+        "SCORPIO",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6472761457/Leadership+Transitions+within+E3SM+HES+Group": {
+        "LBNL",
+        "PNNL",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6480724072/E3SM+Researchers+Join+Genesis+Mission+Projects+to+Advance+AI-Enabled+Earth+System+Prediction": {
+        "223070LANL",
+        "DOE",
+        "GM",
+        "MCS",
+        "RFA",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424068286/Applying+Corrective+Machine+Learning+in+the+E3SM+Atmosphere+Model+in+C+EAMxx": {
+        "ERD",
+        "FV3",
+        "GFDL",
+        "LDRD",
+        "SCREAM",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424035767/E3SM+Celebrates+Outstanding+Achievement+and+AI+Innovation+at+June+2026+All-Hands+Meeting": {
+        "DC",
+        "EAM",
+        "MPAS",
+        "S2D",
     },
 }
+# Use this set to keep track of acronyms that never need to be spelled out.
+KNOWN_DEFINED_ACRONYMS_SET: Set[str] = {"AI", "CPU", "GPU"}
 
 # These functions are only called in newsletter_reviewer mode #################
 
@@ -336,26 +303,31 @@ def get_acronyms(text: str) -> List[str]:
 def filter_acronyms(page_url: str, acronyms: List[str]) -> List[str]:
     filtered_acronyms: List[str] = []
     found_acronyms: Set[str] = set(acronyms)
+    # Filter out known-defined acronyms
+    known_defined_acronyms = KNOWN_DEFINED_ACRONYMS_SET.copy()
     if page_url in KNOWN_DEFINED_ACRONYMS_DICT:
-        # Filter out known-defined acronyms
-        known_defined_acronyms: Set[str] = KNOWN_DEFINED_ACRONYMS_DICT[page_url]
-        remaining_acronyms: Set[str] = found_acronyms - known_defined_acronyms
-        filtered_acronyms = sorted(list(remaining_acronyms))
-    else:
-        # We have no known-defined acronyms
-        filtered_acronyms = sorted(list(found_acronyms))
+        known_defined_acronyms.update(KNOWN_DEFINED_ACRONYMS_DICT.get(page_url, ()))
+    remaining_acronyms: Set[str] = found_acronyms - known_defined_acronyms
+    filtered_acronyms = sorted(list(remaining_acronyms))
     return filtered_acronyms
 
 
 def set_wordpress_keys(page: ConfluencePage):
     if page.wordpress_version != 0:
-        wp_url = map_confluence_to_e3sm(page.url)
-        wp_is_accessible = check_wp_is_accessible(wp_url)
-        page.raw_wordpress_url = wp_url
-        if wp_is_accessible:
-            page.display_wordpress_url = wp_url
+        if page.url in MAILCHIMP_END_MATTER_URLS:
+            page.display_wordpress_url = (
+                "No WordPress post. This content is on the MailChimp draft itself."
+            )
         else:
-            page.display_wordpress_url = f"Inferred {wp_url} but could not access it."
+            wp_url = map_confluence_to_e3sm(page.url)
+            wp_is_accessible = check_wp_is_accessible(wp_url)
+            page.raw_wordpress_url = wp_url
+            if wp_is_accessible:
+                page.display_wordpress_url = wp_url
+            else:
+                page.display_wordpress_url = (
+                    f"Inferred {wp_url} but could not access it."
+                )
 
 
 def check_wp_is_accessible(wp_url):

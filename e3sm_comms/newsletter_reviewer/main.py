@@ -6,7 +6,7 @@ from e3sm_comms.utils import IO_DIR
 def main():
     c = Config("newsletter")
     c.file_input_story_versions = (
-        f"{IO_DIR}/input/newsletter_reviewer/2026_05_newsletter.csv"
+        f"{IO_DIR}/input/newsletter_reviewer/2026_08_newsletter.csv"
     )
     c.sensitive_terms_file = f"{IO_DIR}/input/shared/sensitive_terms.txt"
     c.first_person_file = f"{IO_DIR}/input/newsletter_reviewer/first_person_ok_urls.txt"
