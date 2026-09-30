@@ -28,60 +28,107 @@ MAILCHIMP_END_MATTER_URLS: Set[str] = {
 # That way, the newsletter-reviewer won't mark them as undefined.
 # This dict maps Confluence page URLs to sets of acronyms
 KNOWN_DEFINED_ACRONYMS_DICT: Dict[str, Set[str]] = {
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424068247/E3SM+Decadal+Vision+2026-2036": {
-        "DOE",
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6702301467/From+the+PI+Nov+26+New+Emulators+for+Exploring+Earth+System+Change": {
+        "DOE"
     },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6489932004/A+Roadmap+for+Adding+Lateral+Water+Transport+to+the+E3SM+Land+Model": {
-        "3D",
-        "DOI",
-        "ESM",
-        "MOAB",
-        "MPI",
-        "NGEE",
-        "PFLOTRAN",
-        "US",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6444220417/A+Fully+Coupled+AI+Emulator+of+E3SMv3+Reproduces+Its+Statistics": {
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6743228430/An+Introduction+to+E3SM+Emulators": {
+        "ACE",
         "ACE2",
-        "ACE2S",
-        "H100",
+        "NVIDIA",
+        "SCREAM",
+        "STRATA",
     },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424035779/Phase+4+Project+Structure": {
-        "DOE",
-        "FY27",
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6133088258/An+E3SM+Emulator+Runs+Storm-Resolving+Atmospheric+Simulation+Across+the+Whole+Planet": {
+        "07NA27344",
+        "3D",
+        "76RL01830",
+        "AC05",
+        "AC52",
+        "BER",
+        "DE",
+        "ERCAP",
+        "GSRM",
+        "NVIDIA",
+        "STRATA2026",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6439338459/Understanding+Biases+in+E3SMv3+Cloud+Radiative+Effects": {
+        "2025EA004757",
+        "40S",
+        "CALIPSO",
+        "CERES",
+        "COSP",
+        "ENSO",
+        "ISCCP",
+        "LWCRE",
+        "MISR",
+        "MJO",
+        "MODIS",
+        "P3",
+        "RMSE",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6488424757/A+New+Generation+of+Land+Modeling+Dynamic+Vegetation+and+Demography+in+E3SM": {
+        "BGC",
+        "C3",
+        "C4",
+        "ILAMB",
+        "NGEE",
+        "SP",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6717702181/New+Aerosol+Treatments+Improve+Earth+System+Modeling": {
+        "MOSAIC",
+        "NERSC",
+        "OBS",
+        "PSA",
+        "VBS",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6717702209/Improved+Representation+of+Surface+Emissivity+Effects+on+Longwave+Radiation": {
+        "DE",
+        "EG",
+        "LANL",
+        "SC0019278",
+        "SC0022117",
+        "UCI",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6824001556/E3SM+v3.2+tag": {
+        "CMIP7",
+        "CRYO2010",
+        "ELM",
+        "LR",
+        "MOSART",
+        "MPAS",
+        "WAVEWATCH",
+        "WCYCL2010",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6743228417/E3SM+Data+Docs+expands+access+to+emulator+training+datasets": {
+        "ACE2",
+        "NERSC",
+        "NVIDIA",
+        "SCREAM",
+        "STRATA",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6747521187/E3SM+Data+Docs+adds+newly+available+v3+RRM+and+large-ensemble+datasets": {
+        "BGC",
+        "CMIP",
+        "DECK",
+        "LR",
+        "NERSC",
+    },
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6869745761/Exciting+Postdoctoral+Opportunities+in+E3SM+Phase+4+Join+Our+Team": {
+        "ELM",
+        "FATES",
         "OMEGA",
     },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424068235/Report+from+All-Hands": {
-        "ARM",
-        "BER",
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6747521204/New+2-Page+E3SM+Project+Overview+Brochure+Now+Available": {
+        "AGU",
+        "AMS",
         "DOE",
-        "LES",
-        "S2D",
-        "SCORPIO",
     },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6472761457/Leadership+Transitions+within+E3SM+HES+Group": {
-        "LBNL",
-        "PNNL",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6480724072/E3SM+Researchers+Join+Genesis+Mission+Projects+to+Advance+AI-Enabled+Earth+System+Prediction": {
-        "223070LANL",
-        "DOE",
-        "GM",
-        "MCS",
-        "RFA",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424068286/Applying+Corrective+Machine+Learning+in+the+E3SM+Atmosphere+Model+in+C+EAMxx": {
-        "ERD",
-        "FV3",
-        "GFDL",
-        "LDRD",
-        "SCREAM",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424035767/E3SM+Celebrates+Outstanding+Achievement+and+AI+Innovation+at+June+2026+All-Hands+Meeting": {
-        "DC",
-        "EAM",
+    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6439338471/Heroic+Bug+Fixes+A+Cooler+Destination+for+Snowcapped+Ice": {
+        "CESM",
+        "ESM",
+        "MALI",
+        "MOSART",
         "MPAS",
-        "S2D",
     },
 }
 # Use this set to keep track of acronyms that never need to be spelled out.
@@ -447,7 +494,9 @@ def construct_markdown_table(
         for status in [
             "Peter reviewed",
             "Ready for Peter",
+            "Ready for WordPress page",
             "Ready for Renata",
+            "Finalizing draft",
             "Draft",
             "Not started",
         ]:
@@ -556,7 +605,9 @@ def split_by_review_status(
     groups: Dict[str, List[ConfluencePage]] = {
         "Not started": [],
         "Draft": [],
+        "Finalizing draft": [],
         "Ready for Renata": [],
+        "Ready for WordPress page": [],
         "Ready for Peter": [],
         "Peter reviewed": [],
     }
