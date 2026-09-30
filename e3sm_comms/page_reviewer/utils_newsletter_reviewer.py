@@ -27,63 +27,7 @@ MAILCHIMP_END_MATTER_URLS: Set[str] = {
 # Use this dict to keep track of acronyms that we know are defined (either through link or text expansion).
 # That way, the newsletter-reviewer won't mark them as undefined.
 # This dict maps Confluence page URLs to sets of acronyms
-KNOWN_DEFINED_ACRONYMS_DICT: Dict[str, Set[str]] = {
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424068247/E3SM+Decadal+Vision+2026-2036": {
-        "DOE",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6489932004/A+Roadmap+for+Adding+Lateral+Water+Transport+to+the+E3SM+Land+Model": {
-        "3D",
-        "DOI",
-        "ESM",
-        "MOAB",
-        "MPI",
-        "NGEE",
-        "PFLOTRAN",
-        "US",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6444220417/A+Fully+Coupled+AI+Emulator+of+E3SMv3+Reproduces+Its+Statistics": {
-        "ACE2",
-        "ACE2S",
-        "H100",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424035779/Phase+4+Project+Structure": {
-        "DOE",
-        "FY27",
-        "OMEGA",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424068235/Report+from+All-Hands": {
-        "ARM",
-        "BER",
-        "DOE",
-        "LES",
-        "S2D",
-        "SCORPIO",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6472761457/Leadership+Transitions+within+E3SM+HES+Group": {
-        "LBNL",
-        "PNNL",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6480724072/E3SM+Researchers+Join+Genesis+Mission+Projects+to+Advance+AI-Enabled+Earth+System+Prediction": {
-        "223070LANL",
-        "DOE",
-        "GM",
-        "MCS",
-        "RFA",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424068286/Applying+Corrective+Machine+Learning+in+the+E3SM+Atmosphere+Model+in+C+EAMxx": {
-        "ERD",
-        "FV3",
-        "GFDL",
-        "LDRD",
-        "SCREAM",
-    },
-    "https://e3sm.atlassian.net/wiki/spaces/EPWCD/pages/6424035767/E3SM+Celebrates+Outstanding+Achievement+and+AI+Innovation+at+June+2026+All-Hands+Meeting": {
-        "DC",
-        "EAM",
-        "MPAS",
-        "S2D",
-    },
-}
+KNOWN_DEFINED_ACRONYMS_DICT: Dict[str, Set[str]] = {}
 # Use this set to keep track of acronyms that never need to be spelled out.
 KNOWN_DEFINED_ACRONYMS_SET: Set[str] = {"AI", "CPU", "GPU"}
 
