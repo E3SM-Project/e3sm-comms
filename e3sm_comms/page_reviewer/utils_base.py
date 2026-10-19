@@ -356,14 +356,16 @@ def get_e3sm_url_status(e3sm_url: str) -> str:
     except requests.exceptions.Timeout:
         return "link times out"
     except requests.exceptions.HTTPError as e:
-        status_code = e.response.status_code if e.response is not None else None
-        if status_code == 503 and (
-            e.response.url if e.response is not None else ""
-        ).startswith("https://e3sm.org"):
+        resp = e.response
+        status_code = resp.status_code if resp is not None else None
+        url = resp.url if resp is not None else e3sm_url
+        if status_code == 503 and url.startswith("https://e3sm.org"):
             return "link not whitelisted"
-        return "link raises RequestException"
-    except requests.exceptions.RequestException:
-        return "link raises RequestException"
+        if status_code is not None:
+            return f"link returns HTTP {status_code}"
+        return "link returns HTTP error"
+    except requests.exceptions.RequestException as e:
+        return f"link request failed: {type(e).__name__}"
     except Exception:
         return "link raises Exception"
 

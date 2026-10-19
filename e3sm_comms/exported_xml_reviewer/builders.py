@@ -46,7 +46,7 @@ class ReportRecord:
 @dataclass
 class RequestedLinkRecord:
     e3sm_url: str
-    included_later: bool
+    in_flagged_urls: bool
     current_status: str
     currently_whitelisted: bool
     requesting_urls: str
@@ -436,7 +436,6 @@ def build_published_content_link_summaries(
             )
             if redirect_target and normalize_url(redirect_target) in actual_urls:
                 redirected_links.add(linked_norm)
-                valid_links.add(linked_norm)
             elif timed_out:
                 timed_out_links.add(linked_norm)
             else:
@@ -571,7 +570,7 @@ def build_requested_link_records(
         records.append(
             RequestedLinkRecord(
                 e3sm_url=e3sm_url,
-                included_later=e3sm_url in flagged_urls,
+                in_flagged_urls=e3sm_url in flagged_urls,
                 current_status=current_status,
                 currently_whitelisted=currently_whitelisted,
                 requesting_urls=requesting_urls,
@@ -633,7 +632,7 @@ def sort_requested_link_records(
     return sorted(
         requested_link_records,
         key=lambda r: (
-            0 if r.included_later else 1,
+            0 if r.in_flagged_urls else 1,
             status_order.get(r.current_status, 2),
             0 if r.currently_whitelisted else 1,
             r.e3sm_url.lower(),

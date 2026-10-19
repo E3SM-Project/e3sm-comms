@@ -224,8 +224,8 @@ def main() -> None:
     print(
         f"Wrote invalid internal links report to {OUTPUT_INVALID_INTERNAL_LINKS_REPORT}"
     )
-    print(f"Wrote published pages link report to {OUTPUT_PUBLISHED_PAGES_LINK_REPORT}")
     print(f"Wrote external links report to {OUTPUT_EXTERNAL_LINKS_REPORT}")
+    print(f"Wrote published pages link report to {OUTPUT_PUBLISHED_PAGES_LINK_REPORT}")
 
 
 if __name__ == "__main__":

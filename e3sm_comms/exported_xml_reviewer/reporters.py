@@ -685,21 +685,21 @@ def write_navigation_issues_report(
         f.write(f"## 5. Requested links ({len(sorted_requested_link_records)})\n\n")
         if sorted_requested_link_records:
             f.write(
-                "| e3sm.org link | Included later on this page? | Current status | Currently whitelisted? | Requesting URLs |\n"
+                "| e3sm.org link | In flagged URLs? | Current status | Currently whitelisted? | Requesting URLs |\n"
             )
             f.write("| --- | --- | --- | --- | --- |\n")
 
             for requested_record in sorted_requested_link_records:
-                included_later = (
+                in_flagged_urls = (
                     "Yes"
-                    if requested_record.included_later
+                    if requested_record.in_flagged_urls
                     else "No (i.e., contains no sensitive terms)"
                 )
                 currently_whitelisted = (
                     "Yes" if requested_record.currently_whitelisted else "No"
                 )
                 f.write(
-                    f"| {requested_record.e3sm_url} | {included_later} | {requested_record.current_status} | "
+                    f"| {requested_record.e3sm_url} | {in_flagged_urls} | {requested_record.current_status} | "
                     f"{currently_whitelisted} | {requested_record.requesting_urls} |\n"
                 )
         else:
