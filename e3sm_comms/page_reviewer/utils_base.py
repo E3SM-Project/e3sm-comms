@@ -10,6 +10,8 @@ import requests
 from bs4 import BeautifulSoup
 from requests.auth import HTTPBasicAuth
 
+from e3sm_comms.utils import count_sensitive_terms
+
 
 # Classes #####################################################################
 # Set these values in newsletter_review/main.py, resource_reviewer/main.py, website_reviewer/main.py
@@ -100,6 +102,7 @@ class ConfluencePage(object):
         # Set by extract_data_from_content_url
         self.title: str = ""
         self.current_version: int = 0
+        self.created_date: str = ""
 
         # Set by extract_data_from_content_url_body
         self.main_html: Optional[ParsedHTML] = None
@@ -262,14 +265,9 @@ def split_html(raw_html: str) -> Tuple[ParsedHTML, Optional[ParsedHTML]]:
 def find_sensitive_terms(
     list_sensitive_terms: List[str], lowercase_text: str
 ) -> Dict[str, int]:
-    result = {}
-    for term in list_sensitive_terms:
-        pattern = re.escape(term)
-        matches = re.findall(pattern, lowercase_text)
-        count = len(matches)
-        if count > 0:
-            result[term] = count
-    return result
+    return count_sensitive_terms(
+        lowercase_text, list_sensitive_terms, whole_words_only=False
+    )
 
 
 def remove_output_files(config: Config):
@@ -295,7 +293,7 @@ def remove_output_files(config: Config):
             print(f"Could not remove {filename}: {e}")
 
 
-# Functions used by newsletter, resource modes ################################
+# Functions used by newsletter, resource, term modes ##########################
 def map_confluence_to_e3sm(url: str, page_title: str = "") -> str:
     if page_title:
         # Map:
@@ -347,6 +345,29 @@ def map_confluence_to_e3sm(url: str, page_title: str = "") -> str:
     # Assemble the new URL
     new_url: str = f"https://e3sm.org/{slug}/"
     return new_url
+
+
+# Functions used by e3sm_org, term modes ####################################
+def get_e3sm_url_status(e3sm_url: str) -> str:
+    try:
+        response = requests.get(e3sm_url, timeout=10)
+        response.raise_for_status()  # Raises HTTPError for 4xx/5xx responses
+        return "link works not logged-in"
+    except requests.exceptions.Timeout:
+        return "link times out"
+    except requests.exceptions.HTTPError as e:
+        resp = e.response
+        status_code = resp.status_code if resp is not None else None
+        url = resp.url if resp is not None else e3sm_url
+        if status_code == 503 and url.startswith("https://e3sm.org"):
+            return "link not whitelisted"
+        if status_code is not None:
+            return f"link returns HTTP {status_code}"
+        return "link returns HTTP error"
+    except requests.exceptions.RequestException as e:
+        return f"link request failed: {type(e).__name__}"
+    except Exception:
+        return "link raises Exception"
 
 
 # Debugging ###################################################################
