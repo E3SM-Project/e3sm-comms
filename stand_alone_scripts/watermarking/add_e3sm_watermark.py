@@ -206,11 +206,11 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-POSITIONS = (
+POSITIONS: tuple[str, ...] = (
     "bottom-left",
     "bottom-right",
     "center-left",
@@ -220,7 +220,13 @@ POSITIONS = (
 )
 
 
-def prepare_logo(path, width, opacity, keep_white, whiten=0.0):
+def prepare_logo(
+    path: Path,
+    width: int,
+    opacity: float,
+    keep_white: bool,
+    whiten: float = 0.0,
+) -> Image.Image:
     """Return a resized RGBA logo with background keying and color controls.
 
     Args:
@@ -234,36 +240,45 @@ def prepare_logo(path, width, opacity, keep_white, whiten=0.0):
     numeric ranges. Opening or decoding an unsupported logo raises a Pillow
     or OS error. The returned image is independent of the source file handle.
     """
+    source: Image.Image
     with Image.open(path) as source:
-        logo = ImageOps.exif_transpose(source).convert("RGBA")
+        logo: Image.Image = ImageOps.exif_transpose(source).convert("RGBA")
     if not keep_white:
         # Smoothly key near-white pixels, preserving existing transparency.
-        pixels = []
+        pixels: list[tuple[int, int, int, int]] = []
+        r: int
+        g: int
+        b: int
+        a: int
         for r, g, b, a in (
             logo.get_flattened_data()
             if hasattr(logo, "get_flattened_data")
             else logo.getdata()
         ):
-            distance = max(255 - r, 255 - g, 255 - b)
-            factor = max(0.0, min(1.0, (distance - 12) / 24))
+            distance: int = max(255 - r, 255 - g, 255 - b)
+            factor: float = max(0.0, min(1.0, (distance - 12) / 24))
             pixels.append((r, g, b, round(a * factor)))
         logo.putdata(pixels)
     # Whiten only the logo colors, after removing the original white background.
     # Preserve alpha so whitening does not restore the background rectangle.
     if whiten:
-        alpha = logo.getchannel("A")
-        rgb = Image.blend(
+        alpha: Image.Image = logo.getchannel("A")
+        rgb: Image.Image = Image.blend(
             logo.convert("RGB"), Image.new("RGB", logo.size, "white"), whiten
         )
         logo = rgb.convert("RGBA")
         logo.putalpha(alpha)
-    height = max(1, round(width * logo.height / logo.width))
+    height: int = max(1, round(width * logo.height / logo.width))
     logo = logo.resize((width, height), Image.Resampling.LANCZOS)
     logo.putalpha(logo.getchannel("A").point(lambda a: round(a * opacity)))
     return logo
 
 
-def placement(size, logo_size, args):
+def placement(
+    size: tuple[int, int],
+    logo_size: tuple[int, int],
+    args: argparse.Namespace,
+) -> tuple[int, int]:
     """Compute and validate the watermark's upper-left pixel coordinates.
 
     Args:
@@ -280,21 +295,31 @@ def placement(size, logo_size, args):
     Absolute x/bottom overrides apply after the named anchor and can leave
     the placement frame while remaining inside the overall canvas.
     """
+    w: int
+    h: int
     w, h = size
+    left: int
+    top: int
+    right: int
+    bottom: int
     left, top, right, bottom = args.frame or (0, 0, w, h)
     if not (0 <= left < right <= w and 0 <= top < bottom <= h):
         raise ValueError("--frame must be inside the image/video.")
-    margin = (
+    margin: int = (
         args.margin
         if args.margin is not None
         else round(min(right - left, bottom - top) * 0.01)
     )
+    lw: int
+    lh: int
     lw, lh = logo_size
     if margin < 0 or lw + 2 * margin > right - left or lh + 2 * margin > bottom - top:
         raise ValueError("Logo and margins do not fit inside the placement frame.")
+    vertical: str
+    horizontal: str
     vertical, horizontal = args.position.split("-")
-    x = left + margin if horizontal == "left" else right - margin - lw
-    y = {
+    x: int = left + margin if horizontal == "left" else right - margin - lw
+    y: int = {
         "top": top + margin,
         "center": top + (bottom - top - lh) // 2,
         "bottom": bottom - margin - lh,
@@ -307,26 +332,30 @@ def placement(size, logo_size, args):
     return x, y
 
 
-def get_logo(size, args):
+def get_logo(
+    size: tuple[int, int], args: argparse.Namespace
+) -> tuple[Image.Image, tuple[int, int]]:
     """Prepare a logo and placement for one displayed canvas size.
 
     Explicit args.width takes priority over args.scale. Returns a pair:
     (RGBA Pillow image, (left_x, top_y)). Bounds validation is delegated to
     placement(); failures propagate to the command-line error handler.
     """
-    frame_width = args.frame[2] - args.frame[0] if args.frame else size[0]
-    width = (
+    frame_width: int = args.frame[2] - args.frame[0] if args.frame else size[0]
+    width: int = (
         args.width
         if args.width is not None
         else max(1, round(frame_width * args.scale))
     )
     if width <= 0:
         raise ValueError("--width must be positive.")
-    logo = prepare_logo(args.logo, width, args.opacity, args.keep_white, args.whiten)
+    logo: Image.Image = prepare_logo(
+        args.logo, width, args.opacity, args.keep_white, args.whiten
+    )
     return logo, placement(size, logo.size, args)
 
 
-def images(args, destination):
+def images(args: argparse.Namespace, destination: Path) -> None:
     """Composite the logo onto an image, animation, or multipage raster.
 
     Args:
@@ -338,8 +367,9 @@ def images(args, destination):
     loop information, and selected ICC metadata are passed when applicable.
     Conversion and metadata limits are described in the module manual.
     """
+    source: Image.Image
     with Image.open(args.input) as source:
-        count = getattr(source, "n_frames", 1)
+        count: int = getattr(source, "n_frames", 1)
         if (
             count > 1
             and not args.preview
@@ -349,21 +379,25 @@ def images(args, destination):
             raise ValueError(
                 "Multiple frames require GIF, WebP, PNG (APNG), or TIFF output."
             )
-        frames, durations = [], []
-        loop = source.info.get("loop")
-        icc = source.info.get("icc_profile")
+        frames: list[Image.Image] = []
+        durations: list[int] = []
+        loop: Optional[int] = source.info.get("loop")
+        icc: Optional[bytes] = source.info.get("icc_profile")
+        i: int
         for i in range(1 if args.preview else count):
             source.seek(i)
-            frame = ImageOps.exif_transpose(source).convert("RGBA")
+            frame: Image.Image = ImageOps.exif_transpose(source).convert("RGBA")
+            logo: Image.Image
+            xy: tuple[int, int]
             logo, xy = get_logo(frame.size, args)
             frame.alpha_composite(logo, xy)
             frames.append(frame)
             durations.append(source.info.get("duration", 100))
         options: dict[str, Any] = {}
-        suffix = destination.suffix.lower()
+        suffix: str = destination.suffix.lower()
         if suffix in (".jpg", ".jpeg", ".bmp"):
             # Flatten transparency onto white for formats without alpha.
-            base = Image.new("RGB", frames[0].size, "white")
+            base: Image.Image = Image.new("RGB", frames[0].size, "white")
             base.paste(frames[0], mask=frames[0].getchannel("A"))
             frames[0] = base
             if suffix in (".jpg", ".jpeg"):
@@ -381,7 +415,7 @@ def images(args, destination):
         frames[0].save(destination, **options)
 
 
-def video(args, destination):
+def video(args: argparse.Namespace, destination: Path) -> None:
     """Overlay a prepared PNG logo using FFmpeg, or extract a PNG preview.
 
     Probes displayed dimensions, including common quarter-turn rotation,
@@ -393,10 +427,11 @@ def video(args, destination):
     output suffix. Subprocess errors propagate with FFmpeg diagnostics.
     A failed encode may leave a partial destination file.
     """
+    executable: str
     for executable in ("ffmpeg", "ffprobe"):
         if not shutil.which(executable):
             raise ValueError(f"{executable} is required for video processing.")
-    info = json.loads(
+    info: dict[str, Any] = json.loads(
         subprocess.check_output(
             [
                 "ffprobe",
@@ -414,27 +449,34 @@ def video(args, destination):
     )
     if not info.get("streams"):
         raise ValueError("Input contains no video stream.")
-    stream = info["streams"][0]
-    size = (stream["width"], stream["height"])
-    rotation = float(stream.get("tags", {}).get("rotate", 0))
+    stream: dict[str, Any] = info["streams"][0]
+    size: tuple[int, int] = (stream["width"], stream["height"])
+    rotation: float = float(stream.get("tags", {}).get("rotate", 0))
+    side: dict[str, Any]
     for side in stream.get("side_data_list", []):
         rotation = float(side.get("rotation", rotation))
     if round(rotation) % 180 == 90:
-        size = size[::-1]
+        # Explicit swap (equivalent to size[::-1]) keeps the fixed-length
+        # tuple[int, int] type that type checkers can verify.
+        size = (size[1], size[0])
+    logo: Image.Image
+    x: int
+    y: int
     logo, (x, y) = get_logo(size, args)
-    suffix = destination.suffix.lower()
+    suffix: str = destination.suffix.lower()
     if not args.preview and suffix not in (".mp4", ".mov", ".mkv", ".webm"):
         raise ValueError("Choose MP4, MOV, MKV, or WebM for video output.")
+    folder: str
     with tempfile.TemporaryDirectory(prefix="watermark_") as folder:
-        logo_path = Path(folder) / "logo.png"
+        logo_path: Path = Path(folder) / "logo.png"
         logo.save(logo_path)
         # yuv444p handles odd frame sizes without resizing or cropping.
-        pixel_format = "yuv420p" if all(n % 2 == 0 for n in size) else "yuv444p"
-        graph = (
+        pixel_format: str = "yuv420p" if all(n % 2 == 0 for n in size) else "yuv444p"
+        graph: str = (
             f"[0:v:0][1:v:0]overlay={x}:{y}:eof_action=repeat:"
             "repeatlast=1:format=auto[out]"
         )
-        command = [
+        command: list[str] = [
             "ffmpeg",
             "-hide_banner",
             "-n",
@@ -480,14 +522,14 @@ def video(args, destination):
         subprocess.run(command + [str(destination)], check=True)
 
 
-def main():
+def main() -> None:
     """Parse CLI options, validate paths/ranges, dispatch, and report status.
 
     Pillow recognition determines the image route; unrecognized input is
     offered to FFmpeg. Expected processing failures become a readable error
     and nonzero exit. Existing destination paths are rejected before writing.
     """
-    parser = argparse.ArgumentParser(
+    parser: argparse.ArgumentParser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
@@ -558,8 +600,8 @@ def main():
     parser.add_argument(
         "--preview", type=Path, help="Write a PNG of the first frame instead"
     )
-    args = parser.parse_args()
-    destination = args.preview or args.output
+    args: argparse.Namespace = parser.parse_args()
+    destination: Path = args.preview or args.output
     if not args.input.is_file() or not args.logo.is_file():
         parser.error("Input and logo must exist.")
     if (
@@ -585,7 +627,7 @@ def main():
         try:
             with Image.open(args.input):
                 pass
-            is_image = True
+            is_image: bool = True
         except UnidentifiedImageError:
             is_image = False
         if is_image:
