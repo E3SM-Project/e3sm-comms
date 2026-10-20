@@ -199,17 +199,25 @@ image and video paths. Functions below document their parameters and roles.
 This script is intended for local command-line use, not as a concurrent output
 writer or as a general-purpose image-format or metadata-preservation converter.
 """
+
 import argparse
 import json
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
+from typing import Any
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-POSITIONS = ('bottom-left', 'bottom-right', 'center-left', 'center-right',
-             'top-left', 'top-right')
+POSITIONS = (
+    "bottom-left",
+    "bottom-right",
+    "center-left",
+    "center-right",
+    "top-left",
+    "top-right",
+)
 
 
 def prepare_logo(path, width, opacity, keep_white, whiten=0.0):
@@ -227,25 +235,31 @@ def prepare_logo(path, width, opacity, keep_white, whiten=0.0):
     or OS error. The returned image is independent of the source file handle.
     """
     with Image.open(path) as source:
-        logo = ImageOps.exif_transpose(source).convert('RGBA')
+        logo = ImageOps.exif_transpose(source).convert("RGBA")
     if not keep_white:
         # Smoothly key near-white pixels, preserving existing transparency.
         pixels = []
-        for r, g, b, a in (logo.get_flattened_data() if hasattr(logo, 'get_flattened_data') else logo.getdata()):
-            distance = max(255-r, 255-g, 255-b)
-            factor = max(0.0, min(1.0, (distance-12)/24))
-            pixels.append((r, g, b, round(a*factor)))
+        for r, g, b, a in (
+            logo.get_flattened_data()
+            if hasattr(logo, "get_flattened_data")
+            else logo.getdata()
+        ):
+            distance = max(255 - r, 255 - g, 255 - b)
+            factor = max(0.0, min(1.0, (distance - 12) / 24))
+            pixels.append((r, g, b, round(a * factor)))
         logo.putdata(pixels)
     # Whiten only the logo colors, after removing the original white background.
     # Preserve alpha so whitening does not restore the background rectangle.
     if whiten:
-        alpha = logo.getchannel('A')
-        rgb = Image.blend(logo.convert('RGB'), Image.new('RGB', logo.size, 'white'), whiten)
-        logo = rgb.convert('RGBA')
+        alpha = logo.getchannel("A")
+        rgb = Image.blend(
+            logo.convert("RGB"), Image.new("RGB", logo.size, "white"), whiten
+        )
+        logo = rgb.convert("RGBA")
         logo.putalpha(alpha)
-    height = max(1, round(width*logo.height/logo.width))
+    height = max(1, round(width * logo.height / logo.width))
     logo = logo.resize((width, height), Image.Resampling.LANCZOS)
-    logo.putalpha(logo.getchannel('A').point(lambda a: round(a*opacity)))
+    logo.putalpha(logo.getchannel("A").point(lambda a: round(a * opacity)))
     return logo
 
 
@@ -269,20 +283,27 @@ def placement(size, logo_size, args):
     w, h = size
     left, top, right, bottom = args.frame or (0, 0, w, h)
     if not (0 <= left < right <= w and 0 <= top < bottom <= h):
-        raise ValueError('--frame must be inside the image/video.')
-    margin = args.margin if args.margin is not None else round(min(right-left, bottom-top)*0.01)
+        raise ValueError("--frame must be inside the image/video.")
+    margin = (
+        args.margin
+        if args.margin is not None
+        else round(min(right - left, bottom - top) * 0.01)
+    )
     lw, lh = logo_size
-    if margin < 0 or lw+2*margin > right-left or lh+2*margin > bottom-top:
-        raise ValueError('Logo and margins do not fit inside the placement frame.')
-    vertical, horizontal = args.position.split('-')
-    x = left+margin if horizontal == 'left' else right-margin-lw
-    y = {'top': top+margin, 'center': top+(bottom-top-lh)//2,
-         'bottom': bottom-margin-lh}[vertical]
+    if margin < 0 or lw + 2 * margin > right - left or lh + 2 * margin > bottom - top:
+        raise ValueError("Logo and margins do not fit inside the placement frame.")
+    vertical, horizontal = args.position.split("-")
+    x = left + margin if horizontal == "left" else right - margin - lw
+    y = {
+        "top": top + margin,
+        "center": top + (bottom - top - lh) // 2,
+        "bottom": bottom - margin - lh,
+    }[vertical]
     # Compatibility with the previous script: optional pixel overrides.
     x = args.x if args.x is not None else x
-    y = args.bottom-lh if args.bottom is not None else y
-    if not (0 <= x <= w-lw and 0 <= y <= h-lh):
-        raise ValueError('Logo placement lies outside the canvas.')
+    y = args.bottom - lh if args.bottom is not None else y
+    if not (0 <= x <= w - lw and 0 <= y <= h - lh):
+        raise ValueError("Logo placement lies outside the canvas.")
     return x, y
 
 
@@ -293,10 +314,14 @@ def get_logo(size, args):
     (RGBA Pillow image, (left_x, top_y)). Bounds validation is delegated to
     placement(); failures propagate to the command-line error handler.
     """
-    frame_width = args.frame[2]-args.frame[0] if args.frame else size[0]
-    width = args.width if args.width is not None else max(1, round(frame_width*args.scale))
+    frame_width = args.frame[2] - args.frame[0] if args.frame else size[0]
+    width = (
+        args.width
+        if args.width is not None
+        else max(1, round(frame_width * args.scale))
+    )
     if width <= 0:
-        raise ValueError('--width must be positive.')
+        raise ValueError("--width must be positive.")
     logo = prepare_logo(args.logo, width, args.opacity, args.keep_white, args.whiten)
     return logo, placement(size, logo.size, args)
 
@@ -314,38 +339,45 @@ def images(args, destination):
     Conversion and metadata limits are described in the module manual.
     """
     with Image.open(args.input) as source:
-        count = getattr(source, 'n_frames', 1)
-        if count > 1 and not args.preview and destination.suffix.lower() not in ('.gif', '.webp', '.png', '.tif', '.tiff'):
-            raise ValueError('Multiple frames require GIF, WebP, PNG (APNG), or TIFF output.')
+        count = getattr(source, "n_frames", 1)
+        if (
+            count > 1
+            and not args.preview
+            and destination.suffix.lower()
+            not in (".gif", ".webp", ".png", ".tif", ".tiff")
+        ):
+            raise ValueError(
+                "Multiple frames require GIF, WebP, PNG (APNG), or TIFF output."
+            )
         frames, durations = [], []
-        loop = source.info.get('loop')
-        icc = source.info.get('icc_profile')
+        loop = source.info.get("loop")
+        icc = source.info.get("icc_profile")
         for i in range(1 if args.preview else count):
             source.seek(i)
-            frame = ImageOps.exif_transpose(source).convert('RGBA')
+            frame = ImageOps.exif_transpose(source).convert("RGBA")
             logo, xy = get_logo(frame.size, args)
             frame.alpha_composite(logo, xy)
             frames.append(frame)
-            durations.append(source.info.get('duration', 100))
-        options = {}
+            durations.append(source.info.get("duration", 100))
+        options: dict[str, Any] = {}
         suffix = destination.suffix.lower()
-        if suffix in ('.jpg', '.jpeg', '.bmp'):
+        if suffix in (".jpg", ".jpeg", ".bmp"):
             # Flatten transparency onto white for formats without alpha.
-            base = Image.new('RGB', frames[0].size, 'white')
-            base.paste(frames[0], mask=frames[0].getchannel('A'))
+            base = Image.new("RGB", frames[0].size, "white")
+            base.paste(frames[0], mask=frames[0].getchannel("A"))
             frames[0] = base
-            if suffix in ('.jpg', '.jpeg'):
+            if suffix in (".jpg", ".jpeg"):
                 options.update(quality=95, subsampling=0)
-        if icc and suffix in ('.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff'):
-            options['icc_profile'] = icc
+        if icc and suffix in (".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"):
+            options["icc_profile"] = icc
         if len(frames) > 1:
             options.update(save_all=True, append_images=frames[1:])
-            if suffix not in ('.tif', '.tiff'):
-                options['duration'] = durations
+            if suffix not in (".tif", ".tiff"):
+                options["duration"] = durations
                 if loop is not None:
-                    options['loop'] = loop
-            if suffix == '.gif':
-                options['disposal'] = 2
+                    options["loop"] = loop
+            if suffix == ".gif":
+                options["disposal"] = 2
         frames[0].save(destination, **options)
 
 
@@ -361,49 +393,91 @@ def video(args, destination):
     output suffix. Subprocess errors propagate with FFmpeg diagnostics.
     A failed encode may leave a partial destination file.
     """
-    for executable in ('ffmpeg', 'ffprobe'):
+    for executable in ("ffmpeg", "ffprobe"):
         if not shutil.which(executable):
-            raise ValueError(f'{executable} is required for video processing.')
-    info = json.loads(subprocess.check_output([
-        'ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries',
-        'stream=width,height:stream_tags=rotate:stream_side_data=rotation',
-        '-of', 'json', str(args.input)]))
-    if not info.get('streams'):
-        raise ValueError('Input contains no video stream.')
-    stream = info['streams'][0]
-    size = (stream['width'], stream['height'])
-    rotation = float(stream.get('tags', {}).get('rotate', 0))
-    for side in stream.get('side_data_list', []):
-        rotation = float(side.get('rotation', rotation))
+            raise ValueError(f"{executable} is required for video processing.")
+    info = json.loads(
+        subprocess.check_output(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height:stream_tags=rotate:stream_side_data=rotation",
+                "-of",
+                "json",
+                str(args.input),
+            ]
+        )
+    )
+    if not info.get("streams"):
+        raise ValueError("Input contains no video stream.")
+    stream = info["streams"][0]
+    size = (stream["width"], stream["height"])
+    rotation = float(stream.get("tags", {}).get("rotate", 0))
+    for side in stream.get("side_data_list", []):
+        rotation = float(side.get("rotation", rotation))
     if round(rotation) % 180 == 90:
         size = size[::-1]
     logo, (x, y) = get_logo(size, args)
     suffix = destination.suffix.lower()
-    if not args.preview and suffix not in ('.mp4', '.mov', '.mkv', '.webm'):
-        raise ValueError('Choose MP4, MOV, MKV, or WebM for video output.')
-    with tempfile.TemporaryDirectory(prefix='watermark_') as folder:
-        logo_path = Path(folder)/'logo.png'
+    if not args.preview and suffix not in (".mp4", ".mov", ".mkv", ".webm"):
+        raise ValueError("Choose MP4, MOV, MKV, or WebM for video output.")
+    with tempfile.TemporaryDirectory(prefix="watermark_") as folder:
+        logo_path = Path(folder) / "logo.png"
         logo.save(logo_path)
         # yuv444p handles odd frame sizes without resizing or cropping.
-        pixel_format = 'yuv420p' if all(n % 2 == 0 for n in size) else 'yuv444p'
-        graph = (f'[0:v:0][1:v:0]overlay={x}:{y}:eof_action=repeat:'
-                 'repeatlast=1:format=auto[out]')
-        command = ['ffmpeg', '-hide_banner', '-n', '-filter_complex_threads', '1',
-                   '-i', str(args.input), '-i', str(logo_path),
-                   '-filter_complex', graph, '-map', '[out]']
+        pixel_format = "yuv420p" if all(n % 2 == 0 for n in size) else "yuv444p"
+        graph = (
+            f"[0:v:0][1:v:0]overlay={x}:{y}:eof_action=repeat:"
+            "repeatlast=1:format=auto[out]"
+        )
+        command = [
+            "ffmpeg",
+            "-hide_banner",
+            "-n",
+            "-filter_complex_threads",
+            "1",
+            "-i",
+            str(args.input),
+            "-i",
+            str(logo_path),
+            "-filter_complex",
+            graph,
+            "-map",
+            "[out]",
+        ]
         if args.preview:
-            command += ['-frames:v', '1', '-update', '1']
+            command += ["-frames:v", "1", "-update", "1"]
         else:
-            command += ['-map', '0:a?', '-map_metadata', '0', '-pix_fmt', pixel_format]
-            if suffix == '.webm':
-                command += ['-c:v', 'libvpx-vp9', '-crf', str(args.crf), '-b:v', '0',
-                            '-c:a', 'libopus']
+            command += ["-map", "0:a?", "-map_metadata", "0", "-pix_fmt", pixel_format]
+            if suffix == ".webm":
+                command += [
+                    "-c:v",
+                    "libvpx-vp9",
+                    "-crf",
+                    str(args.crf),
+                    "-b:v",
+                    "0",
+                    "-c:a",
+                    "libopus",
+                ]
             else:
-                command += ['-c:v', 'libx264', '-preset', 'medium', '-crf', str(args.crf),
-                            '-c:a', 'copy']
-                if suffix in ('.mp4', '.mov'):
-                    command += ['-movflags', '+faststart']
-        subprocess.run(command+[str(destination)], check=True)
+                command += [
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "medium",
+                    "-crf",
+                    str(args.crf),
+                    "-c:a",
+                    "copy",
+                ]
+                if suffix in (".mp4", ".mov"):
+                    command += ["-movflags", "+faststart"]
+        subprocess.run(command + [str(destination)], check=True)
 
 
 def main():
@@ -413,39 +487,99 @@ def main():
     offered to FFmpeg. Expected processing failures become a readable error
     and nonzero exit. Existing destination paths are rejected before writing.
     """
-    parser = argparse.ArgumentParser(description=__doc__,
-                                    formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('input', type=Path, help='Source raster image, animation, or video')
-    parser.add_argument('logo', type=Path, help='Raster logo; first frame used if animated')
-    parser.add_argument('output', type=Path, help='New output filename; required but unused with --preview')
-    parser.add_argument('--position', choices=POSITIONS, default='bottom-left',
-                        help='Anchor inside the placement frame (default bottom-left)')
-    parser.add_argument('--frame', type=int, nargs=4, metavar=('LEFT', 'TOP', 'RIGHT', 'BOTTOM'),
-                        help='Placement bounds in pixels; defaults to the full canvas')
-    parser.add_argument('--width', type=int, help='Positive logo width in pixels; overrides --scale')
-    parser.add_argument('--scale', type=float, default=0.14, help='Fraction of placement-frame width (default .14)')
-    parser.add_argument('--margin', type=int, help='Nonnegative inset in pixels; default 1%% of shorter frame dimension')
-    parser.add_argument('--opacity', type=float, default=0.85,
-                        help='Transparency: 0 invisible, 1 fully opaque (default .85)')
-    parser.add_argument('--whiten', type=float, default=0.0,
-                        help='Color fade: 0 original colors, 1 white logo (default 0)')
-    parser.add_argument('--keep-white', action='store_true',
-                        help='Preserve near-white logo pixels instead of making them transparent')
-    parser.add_argument('--x', type=int, help='Override logo left edge in pixels')
-    parser.add_argument('--bottom', type=int, help='Override logo bottom edge in pixels')
-    parser.add_argument('--crf', type=int, default=17,
-                        help='Video quality, 0–51; lower means higher quality (default 17)')
-    parser.add_argument('--preview', type=Path, help='Write a PNG of the first frame instead')
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "input", type=Path, help="Source raster image, animation, or video"
+    )
+    parser.add_argument(
+        "logo", type=Path, help="Raster logo; first frame used if animated"
+    )
+    parser.add_argument(
+        "output",
+        type=Path,
+        help="New output filename; required but unused with --preview",
+    )
+    parser.add_argument(
+        "--position",
+        choices=POSITIONS,
+        default="bottom-left",
+        help="Anchor inside the placement frame (default bottom-left)",
+    )
+    parser.add_argument(
+        "--frame",
+        type=int,
+        nargs=4,
+        metavar=("LEFT", "TOP", "RIGHT", "BOTTOM"),
+        help="Placement bounds in pixels; defaults to the full canvas",
+    )
+    parser.add_argument(
+        "--width", type=int, help="Positive logo width in pixels; overrides --scale"
+    )
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=0.14,
+        help="Fraction of placement-frame width (default .14)",
+    )
+    parser.add_argument(
+        "--margin",
+        type=int,
+        help="Nonnegative inset in pixels; default 1%% of shorter frame dimension",
+    )
+    parser.add_argument(
+        "--opacity",
+        type=float,
+        default=0.85,
+        help="Transparency: 0 invisible, 1 fully opaque (default .85)",
+    )
+    parser.add_argument(
+        "--whiten",
+        type=float,
+        default=0.0,
+        help="Color fade: 0 original colors, 1 white logo (default 0)",
+    )
+    parser.add_argument(
+        "--keep-white",
+        action="store_true",
+        help="Preserve near-white logo pixels instead of making them transparent",
+    )
+    parser.add_argument("--x", type=int, help="Override logo left edge in pixels")
+    parser.add_argument(
+        "--bottom", type=int, help="Override logo bottom edge in pixels"
+    )
+    parser.add_argument(
+        "--crf",
+        type=int,
+        default=17,
+        help="Video quality, 0–51; lower means higher quality (default 17)",
+    )
+    parser.add_argument(
+        "--preview", type=Path, help="Write a PNG of the first frame instead"
+    )
     args = parser.parse_args()
     destination = args.preview or args.output
     if not args.input.is_file() or not args.logo.is_file():
-        parser.error('Input and logo must exist.')
-    if destination.resolve() in (args.input.resolve(), args.logo.resolve()) or destination.exists():
-        parser.error('Choose a new output path; inputs and existing files cannot be overwritten.')
-    if not 0 <= args.opacity <= 1 or not 0 <= args.whiten <= 1 or not 0 < args.scale <= 1 or not 0 <= args.crf <= 51:
-        parser.error('Opacity and whiten: 0–1; scale: greater than 0 and at most 1; CRF: 0–51.')
-    if args.preview and destination.suffix.lower() != '.png':
-        parser.error('--preview must name a PNG file.')
+        parser.error("Input and logo must exist.")
+    if (
+        destination.resolve() in (args.input.resolve(), args.logo.resolve())
+        or destination.exists()
+    ):
+        parser.error(
+            "Choose a new output path; inputs and existing files cannot be overwritten."
+        )
+    if (
+        not 0 <= args.opacity <= 1
+        or not 0 <= args.whiten <= 1
+        or not 0 < args.scale <= 1
+        or not 0 <= args.crf <= 51
+    ):
+        parser.error(
+            "Opacity and whiten: 0–1; scale: greater than 0 and at most 1; CRF: 0–51."
+        )
+    if args.preview and destination.suffix.lower() != ".png":
+        parser.error("--preview must name a PNG file.")
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         try:
@@ -459,9 +593,9 @@ def main():
         else:
             video(args, destination)
     except (ValueError, OSError, KeyError, subprocess.CalledProcessError) as exc:
-        parser.exit(1, f'Error: {exc}\n')
-    print(f'Created: {destination}')
+        parser.exit(1, f"Error: {exc}\n")
+    print(f"Created: {destination}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
