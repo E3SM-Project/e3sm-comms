@@ -572,6 +572,8 @@ def images(args: argparse.Namespace, destination: Path) -> None:
             durations.append(source.info.get("duration", 100))
         options: dict[str, Any] = {}
         suffix: str = destination.suffix.lower()
+        if suffix in (".jpe", ".jfif"):
+            suffix = ".jpg"
         if suffix in (".jpg", ".jpeg", ".bmp"):
             # Flatten transparency onto white for formats without alpha.
             base: Image.Image = Image.new("RGB", frames[0].size, "white")
@@ -581,6 +583,13 @@ def images(args: argparse.Namespace, destination: Path) -> None:
                 options.update(quality=95, subsampling=0)
         if icc and suffix in (".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"):
             options["icc_profile"] = icc
+        if not args.preview and source.info.get("default_image"):
+            if suffix == ".png":
+                options["default_image"] = True
+                durations = durations[1:]
+            elif suffix in (".gif", ".webp"):
+                frames = frames[1:]
+                durations = durations[1:]
         if len(frames) > 1:
             options.update(save_all=True, append_images=frames[1:])
             if suffix not in (".tif", ".tiff"):
