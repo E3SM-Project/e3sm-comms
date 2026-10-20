@@ -2,7 +2,34 @@
 
 This package is for implementing the software needs of the E3SM Communications team.
 
+## Stand-alone scripts
+
+These scripts are stand-alone and are meant to be copied to one's own workspace. There is no command to run.
+
+Currently, there is only one such script:
+
+```bash
+# You'll have to make sure your environment includes PILLOW>=9.1, ffmpeg, ffprobe
+
+python add_e3sm_watermark.py INPUT LOGO OUTPUT [options]
+```
+
 ## Available commands
+
+These commands can be run from a conda dev environment. For example:
+
+```bash
+# Make sure you have conda activated first
+
+rm -rf build
+conda clean --all --y
+conda env create -f conda/dev.yml -n env-name
+conda activate env-name
+pre-commit run --all-files
+python -m pip install .
+
+e3sm-comms-command-name
+```
 
 ### Simple commands
 
