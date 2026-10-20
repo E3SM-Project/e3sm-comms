@@ -60,6 +60,46 @@ Watermark every frame of an animated GIF:
 
     python add_e3sm_watermark.py animation.gif logo.png marked.gif --position top-left
 
+CONFIG FILES
+============
+Instead of repeating options on every run, put them in a TOML or JSON file
+and pass it with --config:
+
+    python add_e3sm_watermark.py movie.mp4 logo.jpg marked.mp4 --config watermark.toml
+
+INPUT, LOGO, and OUTPUT stay on the command line. Precedence, highest first:
+flags typed on the command line, then the config file, then built-in
+defaults. For example, adding --opacity 0.5 to the command above overrides
+the file's opacity for that run only.
+
+A TOML config (watermark.toml; comments are allowed):
+
+    # Settings for the SamudrACE animation
+    position = "bottom-left"
+    frame = [300, 96, 2286, 1090]
+    width = 280
+    margin = 20
+    opacity = 0.85
+    whiten = 0
+    crf = 17
+
+The same settings as JSON (watermark.json):
+
+    {"position": "bottom-left", "frame": [300, 96, 2286, 1090],
+     "width": 280, "margin": 20, "opacity": 0.85, "whiten": 0, "crf": 17}
+
+The file extension (.toml or .json) selects the parser. TOML needs Python
+3.11 or newer, or the tomli package on older versions; JSON works everywhere.
+
+Keys are the long option names without the leading dashes: position, frame,
+width, scale, margin, opacity, whiten, keep_white (keep-white also works), x,
+bottom, crf, and preview. "frame" is a list of four integers, "keep_white" is
+true or false, and "preview" is a path string interpreted relative to the
+current directory, like the flag. JSON null is treated as "not set". Unknown
+keys, wrong value types, and out-of-range values are reported as errors
+rather than ignored. To override keep_white = true for one run, pass
+--no-keep-white.
+
 POSITION, SIZE, AND COORDINATES
 ==============================
 --position NAME
@@ -107,13 +147,14 @@ COLOR, BACKGROUND, AND TRANSPARENCY
     halfway to white, and 1 makes the visible logo white. This is independent
     of opacity. A fully opaque white logo uses --whiten 1 --opacity 1.
 
---keep-white
+--keep-white / --no-keep-white
     Disable removal of near-white logo pixels. By default, near-white pixels
     are made transparent before whitening, which removes the supplied JPEG
     logo's white background. This is a color key applied throughout the logo,
     including any white lettering or internal details. It is not a connected
     background detector. Use --keep-white for a transparent PNG logo whose
     white details should remain, or to retain an opaque white backdrop.
+    --no-keep-white restores the default, e.g. to override a config file.
 
     Keying uses the largest channel difference from white: differences <=12
     become transparent, >=36 retain original alpha, and intermediate values
@@ -189,6 +230,10 @@ copied audio is incompatible with MP4. FFmpeg diagnostic messages are printed
 to the terminal. An unsupported raster input may fall through to FFmpeg and
 produce a video-decoding error. Use a different supported format in that case.
 
+Config file problems are reported as "--config FILE: ..." and name the
+offending key. Check spelling, value types, and that the extension matches
+the file's format.
+
 The program exits with zero on success and a nonzero status on failure.
 
 IMPLEMENTATION NOTES
@@ -201,12 +246,13 @@ writer or as a general-purpose image-format or metadata-preservation converter.
 """
 
 import argparse
+import importlib
 import json
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, BinaryIO, Optional, TextIO
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
@@ -218,6 +264,137 @@ POSITIONS: tuple[str, ...] = (
     "top-left",
     "top-right",
 )
+
+
+CONFIG_OPTIONS: tuple[str, ...] = (
+    "position",
+    "frame",
+    "width",
+    "scale",
+    "margin",
+    "opacity",
+    "whiten",
+    "keep_white",
+    "x",
+    "bottom",
+    "crf",
+    "preview",
+)
+
+
+def find_toml_module() -> Optional[Any]:
+    """Return a TOML reader module (tomllib or tomli), or None if neither exists.
+
+    tomllib ships with Python 3.11+. Older Pythons can install tomli, which has
+    the same load() interface.
+    """
+    name: str
+    for name in ("tomllib", "tomli"):
+        try:
+            return importlib.import_module(name)
+        except ModuleNotFoundError:
+            continue
+    return None
+
+
+def is_int(value: Any) -> bool:
+    """Return True for integers, excluding bools (a bool is an int in Python)."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def parse_config(data: Any) -> dict[str, Any]:
+    """Validate decoded config data and convert it to argparse defaults.
+
+    Args:
+        data: Result of decoding a JSON or TOML document; must be a table.
+
+    Returns:
+        A dict keyed by argparse destination names (for example keep_white),
+        with values already converted to the types the script expects. Keys
+        may use hyphens or underscores. None values are treated as unset.
+        Numeric range checks (opacity, scale, and so on) happen later in
+        main(), exactly as for command-line values.
+
+    Raises:
+        ValueError: Unknown keys, duplicate keys, or values of the wrong type.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("the top level must be a table of option names and values.")
+    values: dict[str, Any] = {}
+    key: Any
+    value: Any
+    for key, value in data.items():
+        name: str = str(key).replace("-", "_")
+        if name not in CONFIG_OPTIONS:
+            raise ValueError(
+                f"unknown option '{key}'. Valid options: "
+                + ", ".join(CONFIG_OPTIONS)
+                + "."
+            )
+        if name in values:
+            raise ValueError(f"option '{name}' is given more than once.")
+        if value is None:
+            continue
+        if name == "position":
+            if value not in POSITIONS:
+                raise ValueError(f"'position' must be one of: {', '.join(POSITIONS)}.")
+            values[name] = value
+        elif name == "frame":
+            if (
+                not isinstance(value, list)
+                or len(value) != 4
+                or not all(is_int(n) for n in value)
+            ):
+                raise ValueError(
+                    "'frame' must be a list of four integers: "
+                    "[left, top, right, bottom]."
+                )
+            values[name] = list(value)
+        elif name in ("width", "margin", "x", "bottom", "crf"):
+            if not is_int(value):
+                raise ValueError(f"'{name}' must be an integer.")
+            values[name] = value
+        elif name in ("scale", "opacity", "whiten"):
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(f"'{name}' must be a number.")
+            values[name] = float(value)
+        elif name == "keep_white":
+            if not isinstance(value, bool):
+                raise ValueError("'keep_white' must be true or false.")
+            values[name] = value
+        else:  # preview
+            if not isinstance(value, str) or not value:
+                raise ValueError("'preview' must be a non-empty path string.")
+            values[name] = Path(value)
+    return values
+
+
+def load_config(path: Path) -> dict[str, Any]:
+    """Read a .toml or .json config file and return validated option defaults.
+
+    The suffix selects the parser. Raises OSError if the file cannot be read
+    and ValueError for syntax errors, a missing TOML reader, an unsupported
+    suffix, or invalid contents (see parse_config).
+    """
+    suffix: str = path.suffix.lower()
+    data: Any
+    if suffix == ".json":
+        text_handle: TextIO
+        with path.open(encoding="utf-8") as text_handle:
+            data = json.load(text_handle)
+    elif suffix == ".toml":
+        toml: Optional[Any] = find_toml_module()
+        if toml is None:
+            raise ValueError(
+                "TOML files need Python 3.11+ or the 'tomli' package; "
+                "use a .json config on this Python."
+            )
+        binary_handle: BinaryIO
+        with path.open("rb") as binary_handle:
+            data = toml.load(binary_handle)
+    else:
+        raise ValueError("config files must end in .toml or .json.")
+    return parse_config(data)
 
 
 def prepare_logo(
@@ -523,7 +700,7 @@ def video(args: argparse.Namespace, destination: Path) -> None:
 
 
 def main() -> None:
-    """Parse CLI options, validate paths/ranges, dispatch, and report status.
+    """Parse CLI options and any --config file, then validate and dispatch.
 
     Pillow recognition determines the image route; unrecognized input is
     offered to FFmpeg. Expected processing failures become a readable error
@@ -542,6 +719,13 @@ def main() -> None:
         "output",
         type=Path,
         help="New output filename; required but unused with --preview",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        metavar="FILE",
+        help="Read options from a .toml or .json file; flags on the command "
+        "line override it",
     )
     parser.add_argument(
         "--position",
@@ -584,7 +768,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--keep-white",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Preserve near-white logo pixels instead of making them transparent",
     )
     parser.add_argument("--x", type=int, help="Override logo left edge in pixels")
@@ -601,6 +786,15 @@ def main() -> None:
         "--preview", type=Path, help="Write a PNG of the first frame instead"
     )
     args: argparse.Namespace = parser.parse_args()
+    if args.config is not None:
+        # Config values become the parser's defaults, so explicit flags still win.
+        config_values: dict[str, Any]
+        try:
+            config_values = load_config(args.config)
+        except (ValueError, OSError) as exc:
+            parser.error(f"--config {args.config}: {exc}")
+        parser.set_defaults(**config_values)
+        args = parser.parse_args()
     destination: Path = args.preview or args.output
     if not args.input.is_file() or not args.logo.is_file():
         parser.error("Input and logo must exist.")
