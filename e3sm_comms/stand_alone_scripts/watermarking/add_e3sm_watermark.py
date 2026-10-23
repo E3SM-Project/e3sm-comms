@@ -100,6 +100,47 @@ keys, wrong value types, and out-of-range values are reported as errors
 rather than ignored. To override keep_white = true for one run, pass
 --no-keep-white.
 
+USE FROM ANOTHER PYTHON SCRIPT
+==============================
+Import this file as a module (put it on sys.path or next to your script) and
+call add_watermark(). Only the three file paths are required; settings come
+from an optional config file, optional keyword arguments, or both:
+
+    from add_e3sm_watermark import add_watermark
+
+    # Everything from a config file (same TOML/JSON format as --config):
+    add_watermark("movie.mp4", "logo.jpg", "marked.mp4", config="watermark.toml")
+
+    # Config file plus a per-call override:
+    add_watermark("figure.png", "logo.jpg", "marked.png",
+                  config="watermark.json", opacity=0.5)
+
+    # No config file at all:
+    add_watermark("figure.png", "logo.jpg", "marked.png",
+                  position="top-right", width=280)
+
+    # Write a first-frame preview PNG instead of the full output:
+    add_watermark("movie.mp4", "logo.jpg", "marked.mp4",
+                  config="watermark.toml", preview="preview.png")
+
+Precedence, highest first: keyword arguments, then the config file, then
+built-in defaults. Keyword names are the config keys listed above. "frame"
+may be a list or tuple of four integers, and "preview" may be a str or Path.
+A keyword argument set to None counts as "not set". All paths are interpreted
+relative to the current working directory.
+
+add_watermark() returns the Path that was written (the preview PNG in preview
+mode). Unlike the command line, it never prints and never exits the
+interpreter: problems are raised as exceptions. ValueError reports invalid
+settings, config files, or paths (including an output path that already
+exists); OSError reports file-system problems; subprocess.CalledProcessError
+reports an FFmpeg failure. Catch these as needed:
+
+    try:
+        add_watermark(src, logo, dst, config="watermark.toml")
+    except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+        print(f"Watermarking failed: {exc}")
+
 POSITION, SIZE, AND COORDINATES
 ==============================
 --position NAME
@@ -234,13 +275,18 @@ Config file problems are reported as "--config FILE: ..." and name the
 offending key. Check spelling, value types, and that the extension matches
 the file's format.
 
-The program exits with zero on success and a nonzero status on failure.
+On the command line the program exits with zero on success and a nonzero
+status on failure. When called as add_watermark(), failures raise exceptions
+instead (see "USE FROM ANOTHER PYTHON SCRIPT").
 
 IMPLEMENTATION NOTES
 ====================
 Pillow prepares a single RGBA watermark for video; FFmpeg repeats it throughout
 encoding. The same logo preparation and placement functions are used for both
-image and video paths. Functions below document their parameters and roles.
+image and video paths. The command-line main() and the importable
+add_watermark() share the same validation (validate_args) and processing
+(process) functions; they differ only in how settings arrive and how errors
+are reported. Functions below document their parameters and roles.
 This script is intended for local command-line use, not as a concurrent output
 writer or as a general-purpose image-format or metadata-preservation converter.
 """
@@ -248,13 +294,16 @@ writer or as a general-purpose image-format or metadata-preservation converter.
 import argparse
 import importlib
 import json
+import os
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, BinaryIO, Optional, TextIO
+from typing import Any, BinaryIO, Optional, TextIO, Union
 
 from PIL import Image, ImageOps, UnidentifiedImageError
+
+__all__ = ["add_watermark", "main"]
 
 POSITIONS: tuple[str, ...] = (
     "bottom-left",
@@ -280,6 +329,23 @@ CONFIG_OPTIONS: tuple[str, ...] = (
     "crf",
     "preview",
 )
+
+# Built-in defaults, shared by the command-line parser and add_watermark() so
+# the two entry points cannot drift apart.
+DEFAULTS: dict[str, Any] = {
+    "position": "bottom-left",
+    "frame": None,
+    "width": None,
+    "scale": 0.14,
+    "margin": None,
+    "opacity": 0.85,
+    "whiten": 0.0,
+    "keep_white": False,
+    "x": None,
+    "bottom": None,
+    "crf": 17,
+    "preview": None,
+}
 
 
 def find_toml_module() -> Optional[Any]:
@@ -313,7 +379,7 @@ def parse_config(data: Any) -> dict[str, Any]:
         with values already converted to the types the script expects. Keys
         may use hyphens or underscores. None values are treated as unset.
         Numeric range checks (opacity, scale, and so on) happen later in
-        main(), exactly as for command-line values.
+        validate_args(), exactly as for command-line values.
 
     Raises:
         ValueError: Unknown keys, duplicate keys, or values of the wrong type.
@@ -516,7 +582,7 @@ def get_logo(
 
     Explicit args.width takes priority over args.scale. Returns a pair:
     (RGBA Pillow image, (left_x, top_y)). Bounds validation is delegated to
-    placement(); failures propagate to the command-line error handler.
+    placement(); failures propagate to the caller's error handler.
     """
     frame_width: int = args.frame[2] - args.frame[0] if args.frame else size[0]
     width: int = (
@@ -625,8 +691,7 @@ def video(args: argparse.Namespace, destination: Path) -> None:
                 "error",
                 "-select_streams",
                 "v:0",
-                "-show_entries",
-                "stream=width,height:stream_tags=rotate:stream_side_data=rotation",
+                "-show_streams",
                 "-of",
                 "json",
                 str(args.input),
@@ -708,12 +773,134 @@ def video(args: argparse.Namespace, destination: Path) -> None:
         subprocess.run(command + [str(destination)], check=True)
 
 
+def validate_args(args: argparse.Namespace) -> Path:
+    """Check a fully populated option namespace and return the output path.
+
+    Shared by the command line and add_watermark(). Verifies that the input
+    and logo exist, that the destination is new and distinct from both, that
+    numeric options are in range, and that --preview names a PNG.
+
+    Returns:
+        The path that will be written: args.preview if set, else args.output.
+
+    Raises:
+        ValueError: Any check above fails. The command line turns this into a
+        usage error; add_watermark() lets it propagate.
+    """
+    destination: Path = args.preview or args.output
+    if not args.input.is_file() or not args.logo.is_file():
+        raise ValueError("Input and logo must exist.")
+    if (
+        destination.resolve() in (args.input.resolve(), args.logo.resolve())
+        or destination.exists()
+    ):
+        raise ValueError(
+            "Choose a new output path; inputs and existing files cannot be overwritten."
+        )
+    if (
+        not 0 <= args.opacity <= 1
+        or not 0 <= args.whiten <= 1
+        or not 0 < args.scale <= 1
+        or not 0 <= args.crf <= 51
+    ):
+        raise ValueError(
+            "Opacity and whiten: 0–1; scale: greater than 0 and at most 1; CRF: 0–51."
+        )
+    if args.preview and destination.suffix.lower() != ".png":
+        raise ValueError("--preview must name a PNG file.")
+    return destination
+
+
+def process(args: argparse.Namespace, destination: Path) -> None:
+    """Create the destination's parent folder and run the image or video route.
+
+    Pillow recognition determines the image route; unrecognized input is
+    offered to FFmpeg. Exceptions (ValueError, OSError, KeyError,
+    subprocess.CalledProcessError) propagate to the caller, which decides
+    whether to print them (command line) or raise them (library use).
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    is_image: bool
+    try:
+        with Image.open(args.input):
+            pass
+        is_image = True
+    except UnidentifiedImageError:
+        is_image = False
+    if is_image:
+        images(args, destination)
+    else:
+        video(args, destination)
+
+
+def add_watermark(
+    input_path: Union[str, os.PathLike],
+    logo_path: Union[str, os.PathLike],
+    output_path: Union[str, os.PathLike],
+    config: Union[str, os.PathLike, None] = None,
+    **options: Any,
+) -> Path:
+    """Watermark one image, animation, or video from Python code.
+
+    Args:
+        input_path: Source raster image, animation, or video.
+        logo_path: Raster logo; its first frame is used if animated.
+        output_path: New output filename. Existing paths are rejected. In
+            preview mode it is required but not written.
+        config: Optional .toml or .json settings file (same format as the
+            --config flag).
+        **options: Optional per-call settings using the config key names
+            (position, frame, width, scale, margin, opacity, whiten,
+            keep_white, x, bottom, crf, preview). These override the config
+            file, which overrides the built-in defaults. A value of None
+            means "not set". "frame" may be a list or tuple of four ints;
+            "preview" may be a str or Path.
+
+    Returns:
+        The Path that was written (the preview PNG when preview is given).
+
+    Raises:
+        ValueError: Invalid or unknown settings, an unreadable config
+            structure, a missing input/logo, or an existing output path.
+        OSError: File-system problems, including an unreadable config file.
+        subprocess.CalledProcessError: FFmpeg or ffprobe failed.
+
+    Nothing is printed and the interpreter is never exited, so callers can
+    use ordinary try/except handling. A failed encode can leave a partial
+    output file, exactly as on the command line.
+    """
+    values: dict[str, Any] = {}
+    if config is not None:
+        try:
+            values.update(load_config(Path(config)))
+        except ValueError as exc:
+            raise ValueError(f"config {config}: {exc}") from exc
+    # Normalize friendly Python types to what parse_config accepts.
+    cleaned: dict[str, Any] = dict(options)
+    if isinstance(cleaned.get("frame"), tuple):
+        cleaned["frame"] = list(cleaned["frame"])
+    if isinstance(cleaned.get("preview"), os.PathLike):
+        cleaned["preview"] = os.fspath(cleaned["preview"])
+    values.update(parse_config(cleaned))
+
+    args: argparse.Namespace = argparse.Namespace(**DEFAULTS)
+    args.input = Path(input_path)
+    args.logo = Path(logo_path)
+    args.output = Path(output_path)
+    args.config = Path(config) if config is not None else None
+    for name, value in values.items():
+        setattr(args, name, value)
+    destination: Path = validate_args(args)
+    process(args, destination)
+    return destination
+
+
 def main() -> None:
     """Parse CLI options and any --config file, then validate and dispatch.
 
-    Pillow recognition determines the image route; unrecognized input is
-    offered to FFmpeg. Expected processing failures become a readable error
-    and nonzero exit. Existing destination paths are rejected before writing.
+    Expected processing failures become a readable error and nonzero exit.
+    Existing destination paths are rejected before writing. For use from
+    other Python code, call add_watermark() instead.
     """
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -739,7 +926,7 @@ def main() -> None:
     parser.add_argument(
         "--position",
         choices=POSITIONS,
-        default="bottom-left",
+        default=DEFAULTS["position"],
         help="Anchor inside the placement frame (default bottom-left)",
     )
     parser.add_argument(
@@ -755,7 +942,7 @@ def main() -> None:
     parser.add_argument(
         "--scale",
         type=float,
-        default=0.14,
+        default=DEFAULTS["scale"],
         help="Fraction of placement-frame width (default .14)",
     )
     parser.add_argument(
@@ -766,19 +953,19 @@ def main() -> None:
     parser.add_argument(
         "--opacity",
         type=float,
-        default=0.85,
+        default=DEFAULTS["opacity"],
         help="Transparency: 0 invisible, 1 fully opaque (default .85)",
     )
     parser.add_argument(
         "--whiten",
         type=float,
-        default=0.0,
+        default=DEFAULTS["whiten"],
         help="Color fade: 0 original colors, 1 white logo (default 0)",
     )
     parser.add_argument(
         "--keep-white",
         action=argparse.BooleanOptionalAction,
-        default=False,
+        default=DEFAULTS["keep_white"],
         help="Preserve near-white logo pixels instead of making them transparent",
     )
     parser.add_argument("--x", type=int, help="Override logo left edge in pixels")
@@ -788,7 +975,7 @@ def main() -> None:
     parser.add_argument(
         "--crf",
         type=int,
-        default=17,
+        default=DEFAULTS["crf"],
         help="Video quality, 0–51; lower means higher quality (default 17)",
     )
     parser.add_argument(
@@ -804,39 +991,13 @@ def main() -> None:
             parser.error(f"--config {args.config}: {exc}")
         parser.set_defaults(**config_values)
         args = parser.parse_args()
-    destination: Path = args.preview or args.output
-    if not args.input.is_file() or not args.logo.is_file():
-        parser.error("Input and logo must exist.")
-    if (
-        destination.resolve() in (args.input.resolve(), args.logo.resolve())
-        or destination.exists()
-    ):
-        parser.error(
-            "Choose a new output path; inputs and existing files cannot be overwritten."
-        )
-    if (
-        not 0 <= args.opacity <= 1
-        or not 0 <= args.whiten <= 1
-        or not 0 < args.scale <= 1
-        or not 0 <= args.crf <= 51
-    ):
-        parser.error(
-            "Opacity and whiten: 0–1; scale: greater than 0 and at most 1; CRF: 0–51."
-        )
-    if args.preview and destination.suffix.lower() != ".png":
-        parser.error("--preview must name a PNG file.")
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination: Path
     try:
-        try:
-            with Image.open(args.input):
-                pass
-            is_image: bool = True
-        except UnidentifiedImageError:
-            is_image = False
-        if is_image:
-            images(args, destination)
-        else:
-            video(args, destination)
+        destination = validate_args(args)
+    except ValueError as exc:
+        parser.error(str(exc))
+    try:
+        process(args, destination)
     except (ValueError, OSError, KeyError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f"Error: {exc}\n")
     print(f"Created: {destination}")
