@@ -19,6 +19,7 @@ dependencies:
   # Base
   # =================
   - beautifulsoup4
+  - ffmpeg
   - pillow
   - pytz
   - requests

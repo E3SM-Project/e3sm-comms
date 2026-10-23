@@ -124,6 +124,7 @@ e3sm-comms-html-reviewer = "e3sm_comms.html_reviewer.main:main"
 e3sm-comms-related-project-reviewer = "e3sm_comms.related_project_reviewer.main:main"
 e3sm-comms-tree-reviewer = "e3sm_comms.tree_reviewer.main:main"
 e3sm-comms-video-reviewer = "e3sm_comms.video_reviewer.main:main"
+e3sm-comms-watermark-generator = "e3sm_comms.watermark_generator.main:main"
 
 #[project.urls]
 # Documentation =
