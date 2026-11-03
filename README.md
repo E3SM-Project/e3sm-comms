@@ -2,7 +2,28 @@
 
 This package is for implementing the software needs of the E3SM Communications team.
 
+## Stand-alone scripts
+
+Some scripts are stand-alone and are primarily meant to be copied to one's own workspace. These are documented by individual README files under `e3sm_comms/stand_alone_scripts`.
+
 ## Available commands
+
+These commands can be run from a conda dev environment. For example:
+
+```bash
+# Make sure you have conda activated first
+
+rm -rf build
+conda clean --all --y
+conda env create -f conda/dev.yml -n env-name
+conda activate env-name
+pre-commit run --all-files
+python -m pip install .
+
+e3sm-comms-command-name
+```
+
+`input` and `output` below refer to files required, not parameters used in the command's `main.py` file.
 
 ### Simple commands
 
@@ -26,6 +47,11 @@ This package is for implementing the software needs of the E3SM Communications t
   - Other: txt file of sensitive terms, txt file of whitelisted e3sm.org pages, txt file of links known to be inaccessible for automated review
 - output: 6 files under `output/exported_xml_reviewer/`: (1) `wordpress_sensitive_terms_report.md`, (2) `wordpress_hierarchical_outline.txt`, (3) `wordpress_navigation_issues_report.md`, (4) `wordpress_invalid_internal_links_report.md`, (5) `wordpress_invalid_external_links_report.md`, (6) `wordpress_published_pages_link_report.md`
 - output (optional, with `--check-non-published-access`): also `wordpress_non_published_accessibility_report.md`
+
+`e3sm-comms-watermark-generator`
+- CLI entry-point for the `add_e3sm_watermark.py` stand-alone script.
+- input: image to watermark, logo to use as watermark, config file
+- output: watermarked image
 
 ### Confluence API commands (require Confluence token)
 
