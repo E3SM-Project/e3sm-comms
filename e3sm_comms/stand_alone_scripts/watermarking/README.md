@@ -1,6 +1,6 @@
 # About
 
-The `add_e3sm_watermark.py` script adds the E3SM watermark to images and videos of various formats. While it can be run as part of the Comms team's conda dev environment, most users will want to runn it stand-alone.
+The `add_e3sm_watermark.py` script adds the E3SM watermark to images and videos of various formats. While it can be run as part of the Comms team's conda dev environment, most users will want to run it stand-alone.
 
 # How to run as a stand-alone script
 
