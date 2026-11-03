@@ -627,12 +627,15 @@ def images(args: argparse.Namespace, destination: Path) -> None:
         loop: Optional[int] = source.info.get("loop")
         icc: Optional[bytes] = source.info.get("icc_profile")
         i: int
+        logos: dict[tuple[int, int], tuple[Image.Image, tuple[int, int]]] = {}
         for i in range(1 if args.preview else count):
             source.seek(i)
             frame: Image.Image = ImageOps.exif_transpose(source).convert("RGBA")
             logo: Image.Image
             xy: tuple[int, int]
-            logo, xy = get_logo(frame.size, args)
+            if frame.size not in logos:
+                logos[frame.size] = get_logo(frame.size, args)
+            logo, xy = logos[frame.size]
             frame.alpha_composite(logo, xy)
             frames.append(frame)
             durations.append(source.info.get("duration", 100))
