@@ -9,6 +9,7 @@ Requires Python 3.9 or newer and Pillow 9.1 or newer:
 
 Video processing also requires FFmpeg and ffprobe installed as system programs
 and available on PATH. Installing a Python package named ffmpeg is insufficient.
+Note that the conda-forge package named ffmpeg _is_ sufficient though.
 Check your installation with:
 
     ffmpeg -version
